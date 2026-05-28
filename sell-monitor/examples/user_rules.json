@@ -1,0 +1,17 @@
+{
+  "rules": [
+    {
+      "symbol": "TESTA",
+      "stop_loss": 97.5,
+      "take_profit": 103.2,
+      "entry_reason": "daily resistance + daily fvg reaction"
+    },
+    {
+      "symbol": "TESTB",
+      "stop_loss": 39.8,
+      "take_profit": 45.0,
+      "entry_reason": "trend continuation"
+    }
+  ]
+}
+

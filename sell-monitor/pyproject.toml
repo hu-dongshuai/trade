@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sell-monitor"
+version = "0.1.0"
+description = "Rule-based stock sell monitor built from the user's trading prompt."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["akshare>=1.18.40"]
+
+[project.scripts]
+sell-monitor = "sell_monitor.app.main:main"

@@ -1,0 +1,175 @@
+{
+  "saved_at": "2026-05-27T18:55:40.098558",
+  "symbol": "300014",
+  "latest_daily_ts": "2026-05-27T00:00:00",
+  "daily_trend": "down",
+  "zones": [
+    {
+      "name": "daily_resistance_3",
+      "timeframe": "1d",
+      "low": 65.39714285714287,
+      "high": 66.71285714285715,
+      "score": 7,
+      "level": "A",
+      "tags": [
+        "resistance",
+        "with_fvg",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 2
+    },
+    {
+      "name": "daily_resistance_4",
+      "timeframe": "1d",
+      "low": 67.25714285714285,
+      "high": 68.57285714285713,
+      "score": 7,
+      "level": "A",
+      "tags": [
+        "resistance",
+        "with_fvg",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 2
+    },
+    {
+      "name": "daily_support_4",
+      "timeframe": "1d",
+      "low": 62.30547619047619,
+      "high": 63.62119047619047,
+      "score": 7,
+      "level": "A",
+      "tags": [
+        "support",
+        "with_fvg",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 3
+    },
+    {
+      "name": "daily_support_5",
+      "timeframe": "1d",
+      "low": 65.11714285714287,
+      "high": 66.43285714285715,
+      "score": 7,
+      "level": "A",
+      "tags": [
+        "support",
+        "with_fvg",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 6
+    },
+    {
+      "name": "daily_support_6",
+      "timeframe": "1d",
+      "low": 66.93214285714286,
+      "high": 68.24785714285714,
+      "score": 7,
+      "level": "A",
+      "tags": [
+        "support",
+        "with_fvg",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 4
+    },
+    {
+      "name": "daily_support_7",
+      "timeframe": "1d",
+      "low": 68.62214285714286,
+      "high": 69.93785714285714,
+      "score": 7,
+      "level": "A",
+      "tags": [
+        "support",
+        "with_fvg",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 4
+    },
+    {
+      "name": "daily_resistance_9",
+      "timeframe": "1d",
+      "low": 79.77214285714287,
+      "high": 81.08785714285715,
+      "score": 5,
+      "level": "B",
+      "tags": [
+        "resistance",
+        "with_fvg",
+        "with_order_block"
+      ],
+      "touches": 2
+    },
+    {
+      "name": "daily_resistance_6",
+      "timeframe": "1d",
+      "low": 71.78714285714285,
+      "high": 73.10285714285713,
+      "score": 4,
+      "level": "B",
+      "tags": [
+        "resistance",
+        "with_liquidity"
+      ],
+      "touches": 8
+    },
+    {
+      "name": "daily_support_2",
+      "timeframe": "1d",
+      "low": 58.30547619047619,
+      "high": 59.62119047619047,
+      "score": 4,
+      "level": "B",
+      "tags": [
+        "support",
+        "with_liquidity"
+      ],
+      "touches": 3
+    },
+    {
+      "name": "daily_support_8",
+      "timeframe": "1d",
+      "low": 74.86464285714285,
+      "high": 76.18035714285713,
+      "score": 4,
+      "level": "B",
+      "tags": [
+        "support",
+        "with_liquidity"
+      ],
+      "touches": 4
+    },
+    {
+      "name": "daily_resistance_7",
+      "timeframe": "1d",
+      "low": 73.73714285714287,
+      "high": 75.05285714285715,
+      "score": 2,
+      "level": "C",
+      "tags": [
+        "resistance"
+      ],
+      "touches": 2
+    },
+    {
+      "name": "daily_resistance_11",
+      "timeframe": "1d",
+      "low": 88.92714285714287,
+      "high": 90.24285714285715,
+      "score": 2,
+      "level": "C",
+      "tags": [
+        "resistance"
+      ],
+      "touches": 2
+    }
+  ]
+}
