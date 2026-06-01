@@ -90,11 +90,13 @@ def apply_a_level_support_bias_filter(
     if any("用户设置了硬性清仓规则" in reason for reason in decision.reasons):
         return decision
 
-    bias = find_a_level_support_bias(daily_context.current_price, daily_context.daily_zones)
+    bias = find_ab_level_support_bias(daily_context.current_price, daily_context.daily_zones)
     if bias is None:
         return decision
 
     support, resistance, support_distance, resistance_distance = bias
+    support_level = support.level.value
+    resistance_level = resistance.level.value
     return Decision(
         symbol=decision.symbol,
         action=Action.HOLD,
@@ -103,18 +105,31 @@ def apply_a_level_support_bias_filter(
         reasons=decision.reasons
         + [
             (
-                "A级支撑偏置过滤：当前价未跌破日线A级支撑区 "
+                f"{support_level}级支撑偏置过滤：当前价未跌破日线{support_level}级支撑区 "
                 f"{support.low:.2f}-{support.high:.2f}，距离支撑约 {support_distance:.2f}，"
-                f"距离日线A级压力区 {resistance.low:.2f}-{resistance.high:.2f} 约 {resistance_distance:.2f}，"
-                "当前更靠近支撑，暂不报告减仓或清仓"
+                f"距离日线{resistance_level}级压力区 {resistance.low:.2f}-{resistance.high:.2f} 约 {resistance_distance:.2f}，"
+                "当前更靠近支撑，暂不报告该卖出动作"
             )
         ],
-        next_step="支撑上方继续观察；只有跌破该A级支撑区下沿，或重新靠近A级压力区并出现破位确认后再评估卖出",
-        cancel_condition="跌破日线A级支撑区下沿，或价格更接近日线A级压力区",
+        next_step=(
+            f"支撑上方继续观察；只有跌破该{support_level}级支撑区下沿，"
+            f"或重新靠近日线{resistance_level}级压力区并出现破位确认后再评估卖出"
+        ),
+        cancel_condition=f"跌破日线{support_level}级支撑区下沿，或价格更接近日线{resistance_level}级压力区",
     )
 
 
 def find_a_level_support_bias(
+    current_price: float,
+    zones: list[PriceZone],
+) -> tuple[PriceZone, PriceZone, float, float] | None:
+    bias = find_ab_level_support_bias(current_price, zones)
+    if bias and bias[0].level == ZoneLevel.A:
+        return bias
+    return None
+
+
+def find_ab_level_support_bias(
     current_price: float,
     zones: list[PriceZone],
 ) -> tuple[PriceZone, PriceZone, float, float] | None:
@@ -123,18 +138,24 @@ def find_a_level_support_bias(
     supports = [
         zone
         for zone in zones
-        if "support" in zone.tags and zone.level == ZoneLevel.A and current_price >= zone.low
+        if "support" in zone.tags
+        and zone.level in {ZoneLevel.A, ZoneLevel.B}
+        and current_price >= _support_invalidation_price(zone)
     ]
     resistances = [
         zone
         for zone in zones
-        if "resistance" in zone.tags and zone.level == ZoneLevel.A and current_price <= zone.high
+        if "resistance" in zone.tags
+        and zone.level in {ZoneLevel.A, ZoneLevel.B, ZoneLevel.C}
+        and current_price <= zone.high
     ]
     if not supports or not resistances:
         return None
-
-    support = min(supports, key=lambda zone: _distance_to_zone(current_price, zone))
-    resistance = min(resistances, key=lambda zone: _distance_to_zone(current_price, zone))
+    support = min(supports, key=lambda zone: (_distance_to_zone(current_price, zone), _level_rank(zone.level), -zone.score))
+    resistance = min(
+        resistances,
+        key=lambda zone: (_distance_to_zone(current_price, zone), _level_rank(zone.level), -zone.score),
+    )
     support_distance = _distance_to_zone(current_price, support)
     resistance_distance = _distance_to_zone(current_price, resistance)
     if support_distance < resistance_distance:
@@ -152,11 +173,15 @@ def find_protective_daily_support(current_price: float, zones: list[PriceZone], 
         for zone in zones
         if "support" in zone.tags
         and zone.level in {ZoneLevel.A, ZoneLevel.B}
-        and zone.low <= current_price <= zone.high + protection_pad
+        and _support_invalidation_price(zone) <= current_price <= zone.high + protection_pad
     ]
     if not supports:
         return None
     return max(supports, key=lambda zone: (zone.level == ZoneLevel.A, zone.score, zone.high))
+
+
+def _support_invalidation_price(zone: PriceZone) -> float:
+    return zone.invalidation_price if zone.invalidation_price is not None else zone.low
 
 
 def _distance_to_zone(price: float, zone: PriceZone) -> float:
@@ -165,6 +190,16 @@ def _distance_to_zone(price: float, zone: PriceZone) -> float:
     if price < zone.low:
         return zone.low - price
     return price - zone.high
+
+
+def _level_rank(level: ZoneLevel) -> int:
+    if level == ZoneLevel.A:
+        return 0
+    if level == ZoneLevel.B:
+        return 1
+    if level == ZoneLevel.C:
+        return 2
+    return 3
 
 
 def _has_unfilterable_risk(signals: list[Signal], m15_bars: list[Bar]) -> bool:

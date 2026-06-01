@@ -13,8 +13,10 @@ from sell_monitor.domain.enums import Action, Priority
 from sell_monitor.domain.models import Decision, Position
 from sell_monitor.monitor.daily_context_builder import build_daily_context_from_data
 from sell_monitor.monitor.intraday_monitor import run_intraday_monitor
+from sell_monitor.monitor.replay_decision import _load_replay_market_data
 from sell_monitor.notifier.alert_formatter import format_decision
 from sell_monitor.scoring.decision_engine import build_decision
+from sell_monitor.scoring.fundamental_weight import apply_fundamental_weight, load_fundamental_assessment
 from sell_monitor.scoring.hard_rule_engine import evaluate_hard_rules
 from sell_monitor.scoring.score_engine import compute_score
 from sell_monitor.scoring.support_protection import apply_support_protection
@@ -89,9 +91,9 @@ def main() -> int:
             action=Action.HOLD,
             total_score=0,
             priority=Priority.NORMAL,
-            reasons=["当日未接近日线 A/B 级关键价位"],
-            next_step="继续观察，等待价格进入高优先级关键价位附近",
-            cancel_condition="若后续接近日线 A/B 级关键价位，再重新评估15分钟卖出信号",
+            reasons=["当日未接近日线 A/B 级关键价位或 C 级压力位"],
+            next_step="继续观察，等待价格进入高优先级关键价位或 C 级压力位附近",
+            cancel_condition="若后续接近日线 A/B 级关键价位或 C 级压力位，再重新评估15分钟卖出信号",
         )
     else:
         signals = run_intraday_monitor(daily_context, daily_bars, m15_bars)
@@ -102,13 +104,12 @@ def main() -> int:
             rule=rules.get(args.symbol),
             signals=signals,
         )
-        decision = hard or apply_support_protection(
-            build_decision(args.symbol, compute_score(signals), signals),
-            daily_context,
-            daily_bars,
-            m15_bars,
-            signals,
-        )
+        if hard:
+            decision = hard
+        else:
+            decision = build_decision(args.symbol, compute_score(signals), signals)
+            decision = apply_fundamental_weight(decision, load_fundamental_assessment(provider, args.symbol, as_of_dt))
+            decision = apply_support_protection(decision, daily_context, daily_bars, m15_bars, signals)
 
     print(f"Replay as of {args.as_of_date} 15:00:00")
     print(f"symbol: {args.symbol}")
@@ -122,21 +123,6 @@ def main() -> int:
         print(notice)
     print(format_decision(decision))
     return 0
-
-
-def _load_replay_market_data(provider, symbol: str, as_of_dt: datetime):
-    if hasattr(provider, "get_daily_bars_until") and hasattr(provider, "get_m15_bars_until"):
-        daily_bars = provider.get_daily_bars_until(symbol, as_of_dt, limit=200)
-        m15_bars = provider.get_m15_bars_until(symbol, as_of_dt, limit=200)
-    else:
-        daily_bars = [bar for bar in provider.get_daily_bars(symbol, limit=1000) if bar.ts <= as_of_dt][-200:]
-        m15_bars = [bar for bar in provider.get_m15_bars(symbol, limit=1000) if bar.ts <= as_of_dt][-200:]
-
-    if not daily_bars:
-        raise MarketDataError(f"[{symbol}] 在 {as_of_dt.strftime('%Y-%m-%d')} 之前没有可用日线数据")
-
-    quote_bar = m15_bars[-1] if m15_bars else daily_bars[-1]
-    return daily_bars, m15_bars, quote_bar.close, quote_bar.ts
 
 
 if __name__ == "__main__":

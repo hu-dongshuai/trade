@@ -3,9 +3,18 @@ from __future__ import annotations
 import unittest
 from datetime import datetime
 
-from sell_monitor.app.backtest import BacktestEvent, _classify_outcome, _max_drawdown_pct, _max_runup_pct, summarize_events
-from sell_monitor.domain.enums import Action
-from sell_monitor.domain.models import Bar
+from sell_monitor.app.backtest import (
+    BacktestEvent,
+    BacktestResult,
+    _adjust_missed_after_prior_sell_alerts,
+    _classify_outcome,
+    format_backtest_report,
+    _max_drawdown_pct,
+    _max_runup_pct,
+    summarize_events,
+)
+from sell_monitor.domain.enums import Action, ZoneLevel
+from sell_monitor.domain.models import Bar, PriceZone
 
 
 class BacktestTest(unittest.TestCase):
@@ -39,3 +48,26 @@ class BacktestTest(unittest.TestCase):
         self.assertEqual(1, summary["exit_total"])
         self.assertEqual(1, summary["exit_hit"])
         self.assertEqual(1, summary["missed"])
+
+    def test_prior_sell_alert_within_15_trading_days_prevents_missed_label(self) -> None:
+        events = [
+            BacktestEvent("A", "2026-01-01", Action.REDUCE, 4, 10, 7.1, 0, "命中", "减仓信号"),
+            BacktestEvent("A", "2026-01-02", Action.HOLD, 0, 10, 7.3, 0, "漏报", "持有信号"),
+        ]
+
+        adjusted = _adjust_missed_after_prior_sell_alerts(events)
+
+        self.assertEqual("已预警", adjusted[1].outcome)
+        self.assertIn("不计为漏报", adjusted[1].reason)
+
+    def test_prior_sell_alert_outside_15_trading_days_still_counts_as_missed(self) -> None:
+        events = [BacktestEvent("A", "2026-01-01", Action.REDUCE, 4, 10, 7.1, 0, "命中", "减仓信号")]
+        events.extend(
+            BacktestEvent("A", f"2026-01-{day:02d}", Action.HOLD, 0, 10, 1.0, 0, "未触发", "持有")
+            for day in range(2, 17)
+        )
+        events.append(BacktestEvent("A", "2026-01-17", Action.HOLD, 0, 10, 7.3, 0, "漏报", "持有信号"))
+
+        adjusted = _adjust_missed_after_prior_sell_alerts(events)
+
+        self.assertEqual("漏报", adjusted[-1].outcome)

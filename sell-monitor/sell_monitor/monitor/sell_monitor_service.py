@@ -6,6 +6,7 @@ from sell_monitor.domain.models import Decision, MonitorRunResult, Position
 from sell_monitor.monitor.daily_context_builder import build_daily_context
 from sell_monitor.monitor.intraday_monitor import run_intraday_monitor
 from sell_monitor.scoring.decision_engine import build_decision
+from sell_monitor.scoring.fundamental_weight import apply_fundamental_weight, load_fundamental_assessment
 from sell_monitor.scoring.hard_rule_engine import evaluate_hard_rules
 from sell_monitor.scoring.score_engine import compute_score
 from sell_monitor.scoring.support_protection import (
@@ -40,6 +41,8 @@ class SellMonitorService:
 
         decisions: list[Decision] = []
         notices: list[str] = []
+        zone_snapshots = {}
+        daily_bar_snapshots = {}
         if symbol_filter:
             if symbol_filter not in symbols:
                 self.watchlist_store.ensure_symbol(symbol_filter)
@@ -57,7 +60,12 @@ class SellMonitorService:
                         )
                 except MarketDataError as exc:
                     notices.append(str(exc))
-                    return MonitorRunResult(decisions=decisions, notices=notices)
+                    return MonitorRunResult(
+                        decisions=decisions,
+                        notices=notices,
+                        zone_snapshots=zone_snapshots,
+                        daily_bar_snapshots=daily_bar_snapshots,
+                    )
             symbols = [symbol for symbol in symbols if symbol == symbol_filter]
         for symbol in symbols:
             position = positions.get(symbol)
@@ -69,8 +77,10 @@ class SellMonitorService:
             except MarketDataError as exc:
                 notices.append(str(exc))
                 continue
+            zone_snapshots[symbol] = daily_context.daily_zones
+            daily_bar_snapshots[symbol] = daily_context.daily_bars
             if daily_context.active_zone is None:
-                notices.append(f"[{symbol}] 未接近日线 A/B 级关键价位，暂不启动 15 分钟监测")
+                notices.append(f"[{symbol}] 未接近日线 A/B 级关键价位或 C 级压力位，暂不启动 15 分钟监测")
                 continue
             try:
                 daily_bars = self.data_provider.get_daily_bars(symbol, limit=200)
@@ -94,6 +104,12 @@ class SellMonitorService:
                 continue
             score = compute_score(signals)
             decision = build_decision(symbol, score, signals)
+            decision = apply_fundamental_weight(decision, load_fundamental_assessment(self.data_provider, symbol))
             decision = apply_support_protection(decision, daily_context, daily_bars, m15_bars, signals)
             decisions.append(apply_a_level_support_bias_filter(decision, daily_context))
-        return MonitorRunResult(decisions=decisions, notices=notices)
+        return MonitorRunResult(
+            decisions=decisions,
+            notices=notices,
+            zone_snapshots=zone_snapshots,
+            daily_bar_snapshots=daily_bar_snapshots,
+        )

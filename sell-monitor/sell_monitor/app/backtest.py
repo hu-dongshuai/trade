@@ -10,10 +10,12 @@ from sell_monitor.config import load_default_config
 from sell_monitor.data.akshare_provider import MarketDataError
 from sell_monitor.data.provider_factory import build_market_data_provider
 from sell_monitor.domain.enums import Action, Priority
-from sell_monitor.domain.models import Bar, Decision, Position, UserRule
+from sell_monitor.domain.models import Bar, Decision, Position, PriceZone, UserRule
 from sell_monitor.monitor.daily_context_builder import build_daily_context_from_data
 from sell_monitor.monitor.intraday_monitor import run_intraday_monitor
+from sell_monitor.notifier.zone_table_formatter import format_multi_symbol_zone_tables
 from sell_monitor.scoring.decision_engine import build_decision
+from sell_monitor.scoring.fundamental_weight import apply_fundamental_weight, load_fundamental_assessment
 from sell_monitor.scoring.hard_rule_engine import evaluate_hard_rules
 from sell_monitor.scoring.score_engine import compute_score
 from sell_monitor.scoring.support_protection import (
@@ -43,6 +45,7 @@ class BacktestEvent:
 class BacktestResult:
     events: list[BacktestEvent]
     notices: list[str]
+    zone_snapshots: dict[str, list[PriceZone]] | None = None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,10 +71,15 @@ def main() -> int:
     positions = JsonPositionStore(config.positions_path).load_all()
     rules = JsonUserRuleStore(config.user_rules_path).load_all()
 
-    result = run_backtest(provider, symbols, positions, rules, start_dt, end_dt)
-    output_path = args.output or _default_report_path(config, args.start_date, args.end_date, symbols)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(format_backtest_report(result, args.start_date, args.end_date), encoding="utf-8")
+    try:
+        result = run_backtest(provider, symbols, positions, rules, start_dt, end_dt)
+        output_path = args.output or _default_report_path(config, args.start_date, args.end_date, symbols)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(format_backtest_report(result, args.start_date, args.end_date), encoding="utf-8")
+    finally:
+        close = getattr(provider, "close", None)
+        if callable(close):
+            close()
 
     for notice in result.notices:
         print(notice)
@@ -89,6 +97,7 @@ def run_backtest(
 ) -> BacktestResult:
     events: list[BacktestEvent] = []
     notices: list[str] = []
+    zone_snapshots = {}
     for symbol in symbols:
         try:
             daily_bars = provider.get_daily_bars(symbol, limit=5000)
@@ -112,17 +121,32 @@ def run_backtest(
             )
 
         position = positions.get(symbol) or Position(symbol=symbol, cost_price=daily_bars[0].close, quantity=1)
+        snapshot_daily = [bar for bar in daily_bars if bar.ts.date() <= end_dt.date()][-200:]
+        if snapshot_daily:
+            snapshot_context = build_daily_context_from_data(
+                symbol=symbol,
+                current_price=snapshot_daily[-1].close,
+                daily_bars=snapshot_daily,
+                market_state="neutral",
+                sector_state="neutral",
+                cache=None,
+                cache_key=None,
+                notices=[],
+            )
+            zone_snapshots[symbol] = snapshot_context.daily_zones
         test_days = [bar for bar in daily_bars if start_dt.date() <= bar.ts.date() <= end_dt.date()]
+        symbol_events: list[BacktestEvent] = []
         for day_bar in test_days:
             as_of_dt = datetime.combine(day_bar.ts.date(), time(15, 0, 0))
             daily_until = [bar for bar in daily_bars if bar.ts <= as_of_dt][-200:]
             m15_until = [bar for bar in m15_bars if bar.ts <= as_of_dt][-200:]
             if not daily_until or not m15_until:
                 continue
-            decision = _build_backtest_decision(symbol, daily_until, m15_until, position, rules.get(symbol))
+            decision = _build_backtest_decision(provider, symbol, daily_until, m15_until, position, rules.get(symbol), as_of_dt)
             future_daily = [bar for bar in daily_bars if bar.ts.date() > day_bar.ts.date()]
-            events.append(_build_event(symbol, day_bar, decision, future_daily))
-    return BacktestResult(events=events, notices=notices)
+            symbol_events.append(_build_event(symbol, day_bar, decision, future_daily))
+        events.extend(_adjust_missed_after_prior_sell_alerts(symbol_events))
+    return BacktestResult(events=events, notices=notices, zone_snapshots=zone_snapshots)
 
 
 def format_backtest_report(result: BacktestResult, start_date: str, end_date: str) -> str:
@@ -141,9 +165,10 @@ def format_backtest_report(result: BacktestResult, start_date: str, end_date: st
         "- 减仓命中: 触发后 15 个交易日内最大回撤 >= 7%。",
         "- 清仓命中: 触发后 15 个交易日内最大回撤 >= 7%。",
         "- 误报: 未达到对应回撤阈值，且触发后最大上涨 >= 7%。",
-        "- 漏报: HOLD 后 15 个交易日内最大回撤 >= 7%。",
+        "- 漏报: HOLD 后 15 个交易日内最大回撤 >= 7%，且此前 15 个交易日内没有出现减仓/清仓/止损提醒。",
         "",
     ]
+    lines.extend(format_multi_symbol_zone_tables(result.zone_snapshots or {}))
     if result.notices:
         lines.extend(["## 数据提示", ""])
         lines.extend(f"- {notice}" for notice in result.notices)
@@ -180,11 +205,13 @@ def summarize_events(events: list[BacktestEvent]) -> dict[str, int]:
 
 
 def _build_backtest_decision(
+    provider,
     symbol: str,
     daily_bars: list[Bar],
     m15_bars: list[Bar],
     position: Position,
     rule: UserRule | None,
+    as_of_dt: datetime,
 ) -> Decision:
     current_price = m15_bars[-1].close
     daily_context = build_daily_context_from_data(
@@ -203,13 +230,15 @@ def _build_backtest_decision(
             action=Action.HOLD,
             total_score=0,
             priority=Priority.NORMAL,
-            reasons=["当日未接近日线 A/B 级关键价位"],
+            reasons=["当日未接近日线 A/B 级关键价位或 C 级压力位"],
             next_step="继续观察",
             cancel_condition="重新接近日线关键价位后再评估",
         )
     signals = run_intraday_monitor(daily_context, daily_bars, m15_bars)
     hard = evaluate_hard_rules(symbol, current_price, position, rule, signals)
     decision = hard or build_decision(symbol, compute_score(signals), signals)
+    if hard is None:
+        decision = apply_fundamental_weight(decision, load_fundamental_assessment(provider, symbol, as_of_dt))
     decision = apply_exit_support_protection(decision, daily_context, daily_bars)
     decision = apply_support_protection(
         decision,
@@ -237,6 +266,33 @@ def _build_event(symbol: str, day_bar: Bar, decision: Decision, future_daily: li
         outcome=outcome,
         reason="; ".join(decision.reasons),
     )
+
+
+def _adjust_missed_after_prior_sell_alerts(events: list[BacktestEvent]) -> list[BacktestEvent]:
+    adjusted: list[BacktestEvent] = []
+    for event in events:
+        if event.outcome == "漏报" and _has_prior_sell_alert(adjusted):
+            adjusted.append(
+                BacktestEvent(
+                    symbol=event.symbol,
+                    as_of_date=event.as_of_date,
+                    action=event.action,
+                    score=event.score,
+                    price=event.price,
+                    drawdown_15d=event.drawdown_15d,
+                    runup_15d=event.runup_15d,
+                    outcome="已预警",
+                    reason=event.reason + "; 前15个交易日内已出现减仓/清仓/止损提醒，不计为漏报",
+                )
+            )
+            continue
+        adjusted.append(event)
+    return adjusted
+
+
+def _has_prior_sell_alert(events: list[BacktestEvent]) -> bool:
+    prior_window = events[-15:]
+    return any(event.action in {Action.REDUCE, Action.EXIT_ALL, Action.STOP_LOSS} for event in prior_window)
 
 
 def _classify_outcome(action: Action, drawdown_15d: float, runup_15d: float) -> str:

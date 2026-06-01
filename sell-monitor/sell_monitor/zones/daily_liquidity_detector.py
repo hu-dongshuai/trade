@@ -15,35 +15,46 @@ def detect_daily_liquidity_zones(bars: list[Bar]) -> list[PriceZone]:
     atr = compute_atr(bars, period=14)
     threshold = max(atr * 0.5, bars[-1].close * 0.02)
     zones: list[PriceZone] = []
+    avg_all_volume = average_volume(bars[-60:], min(60, len(bars)))
 
     for label, points, tag in (
-        ("high", [bar.high for _, bar in find_swing_highs(bars)], "high_liquidity"),
-        ("low", [bar.low for _, bar in find_swing_lows(bars)], "low_liquidity"),
+        ("high", [(idx, bar.high) for idx, bar in find_swing_highs(bars)], "high_liquidity"),
+        ("low", [(idx, bar.low) for idx, bar in find_swing_lows(bars)], "low_liquidity"),
     ):
-        clusters: list[list[float]] = []
-        for value in sorted(points):
+        clusters: list[list[tuple[int, float]]] = []
+        for point in sorted(points, key=lambda item: item[1]):
+            value = point[1]
             matched = False
             for cluster in clusters:
-                if abs(mean(cluster) - value) <= threshold:
-                    cluster.append(value)
+                if abs(mean([item[1] for item in cluster]) - value) <= threshold:
+                    cluster.append(point)
                     matched = True
                     break
             if not matched:
-                clusters.append([value])
+                clusters.append([point])
         for idx, cluster in enumerate(clusters):
             if len(cluster) < 3:
                 continue
-            center = mean(cluster)
+            values = [item[1] for item in cluster]
+            touch_indices = [item[0] for item in cluster]
+            center = mean(values)
+            touch_volume = average_volume([bars[item] for item in touch_indices], len(touch_indices))
+            large_liquidity = len(cluster) >= 4 or (avg_all_volume > 0 and touch_volume >= avg_all_volume * 1.2)
+            tags = [tag, "liquidity_pool"]
+            if large_liquidity:
+                tags.append("large_liquidity")
             zones.append(
                 PriceZone(
                     name=f"daily_liquidity_{label}_{idx}",
                     timeframe="1d",
                     low=center - threshold / 2,
                     high=center + threshold / 2,
-                    score=2,
+                    score=3 if large_liquidity else 2,
                     level=ZoneLevel.C,
-                    tags=[tag],
+                    tags=tags,
                     touches=len(cluster),
+                    importance_score=3 if large_liquidity else 2,
+                    fragility_score=1 if large_liquidity else 0,
                 )
             )
 
@@ -62,9 +73,10 @@ def detect_daily_liquidity_zones(bars: list[Bar]) -> list[PriceZone]:
                 high=band_high,
                 score=2,
                 level=ZoneLevel.C,
-                tags=["consolidation_liquidity"],
+                tags=["consolidation_liquidity", "liquidity_pool"],
                 touches=len(recent),
+                importance_score=2,
+                fragility_score=1,
             )
         )
     return zones
-

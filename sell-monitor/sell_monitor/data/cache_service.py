@@ -5,7 +5,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from sell_monitor.domain.enums import ZoneLevel
-from sell_monitor.domain.models import Bar, PriceZone, Quote
+from sell_monitor.domain.models import Bar, FundamentalSnapshot, PriceZone, Quote
+
+
+DAILY_ZONE_CACHE_VERSION = 4
 
 
 class FileMarketDataCache:
@@ -36,6 +39,68 @@ class FileMarketDataCache:
             },
         )
 
+    def load_fundamental_snapshot(
+        self,
+        symbol: str,
+        max_age_seconds: int | None = None,
+        end_dt: datetime | None = None,
+    ) -> FundamentalSnapshot | None:
+        payload = self._load_json(self._fundamental_path(symbol))
+        if not payload:
+            return None
+        if max_age_seconds is not None and self._is_stale(payload, max_age_seconds):
+            return None
+        report_date_raw = payload.get("report_date")
+        snapshot = FundamentalSnapshot(
+            symbol=str(payload["symbol"]),
+            ts=datetime.fromisoformat(str(payload["ts"])),
+            report_date=(datetime.fromisoformat(str(report_date_raw)) if report_date_raw else None),
+            revenue_yoy=_optional_float(payload.get("revenue_yoy")),
+            previous_revenue_yoy=_optional_float(payload.get("previous_revenue_yoy")),
+            net_profit_yoy=_optional_float(payload.get("net_profit_yoy")),
+            deducted_net_profit_yoy=_optional_float(payload.get("deducted_net_profit_yoy")),
+            previous_deducted_net_profit_yoy=_optional_float(payload.get("previous_deducted_net_profit_yoy")),
+            gross_margin=_optional_float(payload.get("gross_margin")),
+            previous_gross_margin=_optional_float(payload.get("previous_gross_margin")),
+            net_margin=_optional_float(payload.get("net_margin")),
+            previous_net_margin=_optional_float(payload.get("previous_net_margin")),
+            roe=_optional_float(payload.get("roe")),
+            operating_cashflow_to_profit=_optional_float(payload.get("operating_cashflow_to_profit")),
+            debt_asset_ratio=_optional_float(payload.get("debt_asset_ratio")),
+            pe_percentile=_optional_float(payload.get("pe_percentile")),
+            event_risk=bool(payload.get("event_risk", False)),
+            event_note=(str(payload["event_note"]) if payload.get("event_note") else None),
+        )
+        if end_dt is not None and snapshot.report_date is not None and snapshot.report_date > end_dt:
+            return None
+        return snapshot
+
+    def save_fundamental_snapshot(self, snapshot: FundamentalSnapshot) -> None:
+        self._save_json(
+            self._fundamental_path(snapshot.symbol),
+            {
+                "saved_at": datetime.now().isoformat(),
+                "symbol": snapshot.symbol,
+                "ts": snapshot.ts.isoformat(),
+                "report_date": snapshot.report_date.isoformat() if snapshot.report_date else None,
+                "revenue_yoy": snapshot.revenue_yoy,
+                "previous_revenue_yoy": snapshot.previous_revenue_yoy,
+                "net_profit_yoy": snapshot.net_profit_yoy,
+                "deducted_net_profit_yoy": snapshot.deducted_net_profit_yoy,
+                "previous_deducted_net_profit_yoy": snapshot.previous_deducted_net_profit_yoy,
+                "gross_margin": snapshot.gross_margin,
+                "previous_gross_margin": snapshot.previous_gross_margin,
+                "net_margin": snapshot.net_margin,
+                "previous_net_margin": snapshot.previous_net_margin,
+                "roe": snapshot.roe,
+                "operating_cashflow_to_profit": snapshot.operating_cashflow_to_profit,
+                "debt_asset_ratio": snapshot.debt_asset_ratio,
+                "pe_percentile": snapshot.pe_percentile,
+                "event_risk": snapshot.event_risk,
+                "event_note": snapshot.event_note,
+            },
+        )
+
     def load_bars(self, symbol: str, timeframe: str, max_age_seconds: int | None = None) -> list[Bar] | None:
         payload = self._load_json(self._bars_path(symbol, timeframe))
         if not payload:
@@ -57,6 +122,13 @@ class FileMarketDataCache:
         ]
 
     def save_bars(self, symbol: str, timeframe: str, bars: list[Bar]) -> None:
+        self._write_bars(symbol, timeframe, bars)
+
+    def merge_save_bars(self, symbol: str, timeframe: str, bars: list[Bar]) -> None:
+        merged = _merge_bars(self.load_bars(symbol, timeframe) or [], bars)
+        self._write_bars(symbol, timeframe, merged)
+
+    def _write_bars(self, symbol: str, timeframe: str, bars: list[Bar]) -> None:
         self._save_json(
             self._bars_path(symbol, timeframe),
             {
@@ -94,6 +166,8 @@ class FileMarketDataCache:
             return None
         if str(payload.get("latest_daily_ts")) != latest_daily_ts.isoformat():
             return None
+        if int(payload.get("strategy_version", 0)) != DAILY_ZONE_CACHE_VERSION:
+            return None
         zones = [
             PriceZone(
                 name=str(item["name"]),
@@ -104,6 +178,11 @@ class FileMarketDataCache:
                 level=ZoneLevel(str(item["level"])),
                 tags=list(item.get("tags", [])),
                 touches=int(item.get("touches", 0)),
+                importance_score=int(item.get("importance_score", item.get("score", 0))),
+                fragility_score=int(item.get("fragility_score", 0)),
+                invalidation_price=(
+                    float(item["invalidation_price"]) if item.get("invalidation_price") is not None else None
+                ),
             )
             for item in payload["zones"]
         ]
@@ -124,6 +203,7 @@ class FileMarketDataCache:
             {
                 "saved_at": datetime.now().isoformat(),
                 "symbol": symbol,
+                "strategy_version": DAILY_ZONE_CACHE_VERSION,
                 "latest_daily_ts": latest_daily_ts.isoformat(),
                 "daily_trend": daily_trend,
                 "zones": [
@@ -136,6 +216,9 @@ class FileMarketDataCache:
                         "level": zone.level.value,
                         "tags": zone.tags,
                         "touches": zone.touches,
+                        "importance_score": zone.importance_score,
+                        "fragility_score": zone.fragility_score,
+                        "invalidation_price": zone.invalidation_price,
                     }
                     for zone in zones
                 ],
@@ -145,6 +228,9 @@ class FileMarketDataCache:
 
     def _quote_path(self, symbol: str) -> Path:
         return self.base_dir / f"{symbol}_quote.json"
+
+    def _fundamental_path(self, symbol: str) -> Path:
+        return self.base_dir / f"{symbol}_fundamental.json"
 
     def _bars_path(self, symbol: str, timeframe: str) -> Path:
         return self.base_dir / f"{symbol}_{timeframe}.json"
@@ -216,14 +302,28 @@ class FileMarketDataCache:
             f"- 对应最新日线: {latest_daily_ts.strftime('%Y-%m-%d %H:%M:%S')}",
             f"- 日线趋势: {daily_trend}",
             "",
-            "| 等级 | 名称 | 区间下沿 | 区间上沿 | 分数 | 标签 | 触达次数 |",
-            "| --- | --- | ---: | ---: | ---: | --- | ---: |",
+            "| 周期 | 等级 | 名称 | 区间下沿 | 区间上沿 | 净分 | 重要性 | 脆弱性 | 失效价 | 触达次数 | 标签 |",
+            "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
         ]
         for zone in zones:
+            invalidation = f"{zone.invalidation_price:.2f}" if zone.invalidation_price is not None else "-"
             lines.append(
-                f"| {zone.level.value} | {zone.name} | {zone.low:.2f} | {zone.high:.2f} | "
-                f"{zone.score} | {', '.join(zone.tags)} | {zone.touches} |"
+                f"| {zone.timeframe} | {zone.level.value} | {zone.name} | {zone.low:.2f} | {zone.high:.2f} | "
+                f"{zone.score} | {zone.importance_score} | {zone.fragility_score} | {invalidation} | "
+                f"{zone.touches} | {', '.join(zone.tags)} |"
             )
         if not zones:
-            lines.append("| - | 无有效关键价位 | - | - | - | - | - |")
+            lines.append("| - | - | 无有效关键价位 | - | - | - | - | - | - | - | - |")
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _merge_bars(existing: list[Bar], incoming: list[Bar]) -> list[Bar]:
+    by_ts = {bar.ts: bar for bar in existing}
+    by_ts.update({bar.ts: bar for bar in incoming})
+    return [by_ts[ts] for ts in sorted(by_ts)]
+
+
+def _optional_float(value) -> float | None:
+    if value is None or value == "":
+        return None
+    return float(value)

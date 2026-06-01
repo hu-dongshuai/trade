@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+from sell_monitor.domain.enums import ZoneLevel
+from sell_monitor.domain.models import Bar, PriceZone
+
+
+def prepare_daily_zones(zones: list[PriceZone], daily_bars: list[Bar], daily_atr: float) -> list[PriceZone]:
+    unbroken = [zone for zone in zones if not _is_effectively_broken_resistance(zone, daily_bars)]
+    return _merge_nearby_resistances(unbroken, daily_atr)
+
+
+def filter_current_daily_zones(
+    zones: list[PriceZone],
+    current_price: float,
+) -> list[PriceZone]:
+    return [_filter_current_zone(_copy_zone(zone), current_price) for zone in zones]
+
+
+def _filter_current_zone(zone: PriceZone, current_price: float) -> PriceZone:
+    if "resistance" not in zone.tags or current_price <= 0:
+        return zone
+
+    distance_pct = _distance_to_zone(current_price, zone) / current_price
+    standalone_fibonacci = "daily_fibonacci" in zone.tags and not _has_confluence(zone)
+    if standalone_fibonacci:
+        zone.level = ZoneLevel.D
+        zone.tags = sorted(set(zone.tags + ["display_only_fibonacci"]))
+        return zone
+
+    if distance_pct > 0.35 and not _is_weekly_ab_resistance(zone):
+        zone.level = ZoneLevel.D
+        zone.tags = sorted(set(zone.tags + ["display_only_far_resistance"]))
+        return zone
+    if distance_pct > 0.20 and not _is_weekly_ab_resistance(zone):
+        zone.level = _downgrade_one_level(zone.level)
+        zone.tags = sorted(set(zone.tags + ["far_resistance_downgraded"]))
+
+    if zone.level == ZoneLevel.C and not _is_valid_c_resistance(zone, distance_pct):
+        zone.level = ZoneLevel.D
+        zone.tags = sorted(set(zone.tags + ["weak_c_resistance"]))
+    return zone
+
+
+def _is_effectively_broken_resistance(zone: PriceZone, daily_bars: list[Bar]) -> bool:
+    if "resistance" not in zone.tags:
+        return False
+    threshold = zone.invalidation_price if zone.invalidation_price is not None else zone.high
+    if threshold <= 0:
+        return False
+    last_touch_idx = _last_touch_index(zone, daily_bars)
+    if last_touch_idx is None:
+        return False
+    bars_after_touch = daily_bars[last_touch_idx + 1:]
+    for prev, last in zip(bars_after_touch, bars_after_touch[1:]):
+        if prev.close > threshold and last.close > threshold:
+            return True
+    return False
+
+
+def _last_touch_index(zone: PriceZone, daily_bars: list[Bar]) -> int | None:
+    for idx in range(len(daily_bars) - 1, -1, -1):
+        bar = daily_bars[idx]
+        if bar.high >= zone.low and bar.low <= zone.high:
+            return idx
+    return None
+
+
+def _merge_nearby_resistances(zones: list[PriceZone], daily_atr: float) -> list[PriceZone]:
+    merge_gap = max(daily_atr * 0.5, 0.0)
+    supports = [zone for zone in zones if "resistance" not in zone.tags]
+    resistances = sorted([zone for zone in zones if "resistance" in zone.tags], key=lambda item: item.low)
+    merged: list[PriceZone] = []
+    for zone in resistances:
+        if merged and zone.low <= merged[-1].high + merge_gap:
+            merged[-1] = _merge_resistance(merged[-1], zone)
+            continue
+        merged.append(zone)
+    return sorted(supports + merged, key=lambda zone: (zone.level, zone.low))
+
+
+def _merge_resistance(left: PriceZone, right: PriceZone) -> PriceZone:
+    best_level = _best_level(left.level, right.level)
+    invalidation_candidates = [
+        value for value in [left.invalidation_price, right.invalidation_price, left.high, right.high] if value is not None
+    ]
+    return PriceZone(
+        name=f"{left.name}+{right.name}",
+        timeframe=left.timeframe if left.timeframe == right.timeframe else "mixed",
+        low=min(left.low, right.low),
+        high=max(left.high, right.high),
+        score=max(left.score, right.score),
+        level=best_level,
+        tags=sorted(set(left.tags + right.tags + ["merged_resistance"])),
+        touches=max(left.touches, right.touches),
+        importance_score=max(left.importance_score, right.importance_score),
+        fragility_score=max(left.fragility_score, right.fragility_score),
+        invalidation_price=max(invalidation_candidates) if invalidation_candidates else None,
+    )
+
+
+def _is_valid_c_resistance(zone: PriceZone, distance_pct: float) -> bool:
+    return distance_pct <= 0.08 or _has_confluence(zone) or "weekly_resistance" in zone.tags
+
+
+def _has_confluence(zone: PriceZone) -> bool:
+    confluence_tags = {
+        "with_weekly_resistance",
+        "with_fvg",
+        "with_liquidity",
+        "with_large_liquidity",
+        "with_fibonacci",
+        "with_order_block",
+    }
+    return bool(set(zone.tags) & confluence_tags)
+
+
+def _is_weekly_ab_resistance(zone: PriceZone) -> bool:
+    return "weekly_resistance" in zone.tags and zone.level in {ZoneLevel.A, ZoneLevel.B}
+
+
+def _downgrade_one_level(level: ZoneLevel) -> ZoneLevel:
+    if level == ZoneLevel.A:
+        return ZoneLevel.B
+    if level == ZoneLevel.B:
+        return ZoneLevel.C
+    return ZoneLevel.D
+
+
+def _best_level(left: ZoneLevel, right: ZoneLevel) -> ZoneLevel:
+    return min(left, right, key=_level_rank)
+
+
+def _level_rank(level: ZoneLevel) -> int:
+    if level == ZoneLevel.A:
+        return 0
+    if level == ZoneLevel.B:
+        return 1
+    if level == ZoneLevel.C:
+        return 2
+    return 3
+
+
+def _distance_to_zone(price: float, zone: PriceZone) -> float:
+    if zone.contains(price):
+        return 0.0
+    if price < zone.low:
+        return zone.low - price
+    return price - zone.high
+
+
+def _copy_zone(zone: PriceZone) -> PriceZone:
+    return PriceZone(
+        name=zone.name,
+        timeframe=zone.timeframe,
+        low=zone.low,
+        high=zone.high,
+        score=zone.score,
+        level=zone.level,
+        tags=list(zone.tags),
+        touches=zone.touches,
+        importance_score=zone.importance_score,
+        fragility_score=zone.fragility_score,
+        invalidation_price=zone.invalidation_price,
+    )

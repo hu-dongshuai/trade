@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
-from sell_monitor.domain.models import Bar, Quote
+from sell_monitor.domain.models import Bar, FundamentalSnapshot, Quote
 
 
 class MarketDataError(RuntimeError):
@@ -184,6 +184,26 @@ class AkshareMarketDataProvider:
     def get_sector_state(self, symbol: str) -> str:
         return "neutral"
 
+    def get_fundamental_snapshot(self, symbol: str) -> FundamentalSnapshot | None:
+        return self._get_fundamental_snapshot(symbol, None)
+
+    def get_fundamental_snapshot_until(self, symbol: str, end_dt: datetime) -> FundamentalSnapshot | None:
+        return self._get_fundamental_snapshot(symbol, end_dt)
+
+    def _get_fundamental_snapshot(self, symbol: str, end_dt: datetime | None) -> FundamentalSnapshot | None:
+        normalized_symbol = _normalize_symbol(symbol)
+        start_year = str((end_dt or datetime.now()).year - 5)
+        try:
+            indicator_df = _call_with_retry(
+                "stock_financial_analysis_indicator",
+                self.ak.stock_financial_analysis_indicator,
+                symbol=normalized_symbol,
+                start_year=start_year,
+            )
+        except Exception as exc:
+            raise MarketDataError(f"[{normalized_symbol}] 基本面数据获取失败，按中性处理") from exc
+        return _fundamental_from_dataframe(normalized_symbol, indicator_df, end_dt)
+
 
 def _normalize_symbol(symbol: str) -> str:
     text = symbol.upper().strip()
@@ -252,6 +272,85 @@ def _parse_timestamp(value: Any) -> datetime:
         except ValueError:
             continue
     return datetime.fromisoformat(text)
+
+
+def _fundamental_from_dataframe(symbol: str, df: Any, end_dt: datetime | None) -> FundamentalSnapshot | None:
+    if df is None or getattr(df, "empty", True):
+        return None
+    records = df.to_dict("records")
+    dated_records = []
+    for item in records:
+        report_date = _pick_report_date(item)
+        if report_date is None:
+            continue
+        if end_dt is None or report_date <= end_dt:
+            dated_records.append((report_date, item))
+    if not dated_records:
+        return None
+    dated_records.sort(key=lambda pair: pair[0])
+    latest_date, latest = dated_records[-1]
+    previous = dated_records[-2][1] if len(dated_records) >= 2 else {}
+    return FundamentalSnapshot(
+        symbol=symbol,
+        ts=datetime.now(),
+        report_date=latest_date,
+        revenue_yoy=_pick_metric(latest, [["营业", "收入", "同比"], ["营收", "同比"]]),
+        previous_revenue_yoy=_pick_metric(previous, [["营业", "收入", "同比"], ["营收", "同比"]]),
+        net_profit_yoy=_pick_metric(latest, [["净利润", "同比"]], exclude_terms=["扣"]),
+        deducted_net_profit_yoy=_pick_metric(latest, [["扣", "净利润", "同比"], ["扣非", "净利润", "同比"]]),
+        previous_deducted_net_profit_yoy=_pick_metric(previous, [["扣", "净利润", "同比"], ["扣非", "净利润", "同比"]]),
+        gross_margin=_pick_metric(latest, [["毛利率"], ["销售", "毛利"]]),
+        previous_gross_margin=_pick_metric(previous, [["毛利率"], ["销售", "毛利"]]),
+        net_margin=_pick_metric(latest, [["净利率"], ["销售", "净利"]]),
+        previous_net_margin=_pick_metric(previous, [["净利率"], ["销售", "净利"]]),
+        roe=_pick_metric(latest, [["净资产收益率"], ["ROE"], ["roe"]]),
+        operating_cashflow_to_profit=_pick_metric(latest, [["经营", "现金", "净利润"], ["现金流", "净利润"]]),
+        debt_asset_ratio=_pick_metric(latest, [["资产负债率"]]),
+    )
+
+
+def _pick_report_date(item: dict[str, Any]) -> datetime | None:
+    for key in ("日期", "报告期", "报告日期", "公告日期", "date", "report_date"):
+        if key in item and item[key] not in (None, ""):
+            try:
+                return _parse_timestamp(item[key])
+            except Exception:
+                continue
+    for key, value in item.items():
+        if "日期" in str(key) or "报告期" in str(key):
+            try:
+                return _parse_timestamp(value)
+            except Exception:
+                continue
+    return None
+
+
+def _pick_metric(
+    item: dict[str, Any],
+    term_groups: list[list[str]],
+    exclude_terms: list[str] | None = None,
+) -> float | None:
+    exclude_terms = exclude_terms or []
+    for key, value in item.items():
+        key_text = str(key)
+        if any(term in key_text for term in exclude_terms):
+            continue
+        for terms in term_groups:
+            if all(term.lower() in key_text.lower() for term in terms):
+                return _parse_optional_number(value)
+    return None
+
+
+def _parse_optional_number(value: Any) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", "").replace("%", "")
+    if not text or text in {"-", "--", "nan", "None"}:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
 
 
 def _filter_historical_m15_bars(symbol: str, bars: list[Bar], end_dt: datetime, limit: int) -> list[Bar]:

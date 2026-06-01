@@ -11,6 +11,7 @@ class CachedFallbackMarketDataProvider:
     M15_TTL_SECONDS = 300
     DAILY_TTL_SECONDS = 4 * 60 * 60
     STATE_TTL_SECONDS = 600
+    FUNDAMENTAL_TTL_SECONDS = 24 * 60 * 60
 
     def __init__(self, primary_provider, cache: FileMarketDataCache) -> None:
         self.primary_provider = primary_provider
@@ -49,7 +50,7 @@ class CachedFallbackMarketDataProvider:
             return cached[-limit:]
         try:
             bars = self.primary_provider.get_daily_bars(symbol, limit=limit)
-            self.cache.save_bars(symbol, "1d", bars)
+            self.cache.merge_save_bars(symbol, "1d", bars)
             return bars
         except MarketDataError:
             cached = self.cache.load_bars(symbol, "1d")
@@ -60,12 +61,14 @@ class CachedFallbackMarketDataProvider:
 
     def get_m15_bars(self, symbol: str, limit: int = 200):
         cached = self.cache.load_bars(symbol, "15m", max_age_seconds=self.M15_TTL_SECONDS)
-        if cached:
+        if cached and len(cached) >= limit:
             self._notices.append(f"[{symbol}] 已命中本地缓存15分钟数据")
             return cached[-limit:]
+        if cached:
+            self._notices.append(f"[{symbol}] 本地缓存15分钟数据不足 {limit} 根，尝试更新网络数据源")
         try:
             bars = self.primary_provider.get_m15_bars(symbol, limit=limit)
-            self.cache.save_bars(symbol, "15m", bars)
+            self.cache.merge_save_bars(symbol, "15m", bars)
             return bars
         except MarketDataError:
             cached = self.cache.load_bars(symbol, "15m")
@@ -89,7 +92,7 @@ class CachedFallbackMarketDataProvider:
             else:
                 bars = self._filter_bars_until(self.primary_provider.get_daily_bars(symbol, limit=1000), end_dt, limit)
             if bars:
-                self.cache.save_bars(symbol, "1d", bars)
+                self.cache.merge_save_bars(symbol, "1d", bars)
             return bars
         except MarketDataError as exc:
             if cached_filtered:
@@ -114,7 +117,7 @@ class CachedFallbackMarketDataProvider:
             else:
                 bars = self._filter_bars_until(self.primary_provider.get_m15_bars(symbol, limit=1000), end_dt, limit)
             if bars:
-                self.cache.save_bars(symbol, "15m", bars)
+                self.cache.merge_save_bars(symbol, "15m", bars)
             return bars
         except MarketDataError as exc:
             if cached_filtered:
@@ -140,6 +143,41 @@ class CachedFallbackMarketDataProvider:
         value = self.primary_provider.get_sector_state(symbol)
         self.cache.save_state(key, value)
         return value
+
+    def get_fundamental_snapshot(self, symbol: str):
+        cached = self.cache.load_fundamental_snapshot(symbol, max_age_seconds=self.FUNDAMENTAL_TTL_SECONDS)
+        if cached:
+            return cached
+        try:
+            method = getattr(self.primary_provider, "get_fundamental_snapshot", None)
+            if method is None:
+                return None
+            snapshot = method(symbol)
+            if snapshot:
+                self.cache.save_fundamental_snapshot(snapshot)
+            return snapshot
+        except MarketDataError:
+            return self.cache.load_fundamental_snapshot(symbol)
+
+    def get_fundamental_snapshot_until(self, symbol: str, end_dt: datetime):
+        cached = self.cache.load_fundamental_snapshot(symbol, end_dt=end_dt)
+        if cached:
+            return cached
+        try:
+            method = getattr(self.primary_provider, "get_fundamental_snapshot_until", None)
+            if method is None:
+                return None
+            snapshot = method(symbol, end_dt)
+            if snapshot:
+                self.cache.save_fundamental_snapshot(snapshot)
+            return snapshot
+        except MarketDataError:
+            return self.cache.load_fundamental_snapshot(symbol, end_dt=end_dt)
+
+    def close(self) -> None:
+        close = getattr(self.primary_provider, "close", None)
+        if callable(close):
+            close()
 
     @staticmethod
     def _filter_bars_until(bars, end_dt: datetime, limit: int):

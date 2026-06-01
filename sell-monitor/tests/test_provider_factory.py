@@ -9,6 +9,7 @@ from pathlib import Path
 from sell_monitor.config import load_default_config
 from sell_monitor.data.akshare_provider import AkshareMarketDataProvider
 from sell_monitor.data.fallback_provider import CachedFallbackMarketDataProvider
+from sell_monitor.data.hybrid_provider import HybridMarketDataProvider
 from sell_monitor.data.market_data_provider import StaticMarketDataProvider
 from sell_monitor.data.provider_factory import build_market_data_provider
 
@@ -44,7 +45,10 @@ class ProviderFactoryTest(unittest.TestCase):
             config = load_default_config(Path(__file__).resolve().parents[1])
             provider = build_market_data_provider(config)
             self.assertIsInstance(provider, CachedFallbackMarketDataProvider)
-            self.assertIsInstance(provider.primary_provider, AkshareMarketDataProvider)
+            if isinstance(provider.primary_provider, HybridMarketDataProvider):
+                self.assertIsInstance(provider.primary_provider.live_provider, AkshareMarketDataProvider)
+            else:
+                self.assertIsInstance(provider.primary_provider, AkshareMarketDataProvider)
         finally:
             if old_provider is None:
                 os.environ.pop("SELL_MONITOR_PROVIDER", None)

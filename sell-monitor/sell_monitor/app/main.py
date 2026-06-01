@@ -6,6 +6,7 @@ from pathlib import Path
 
 from sell_monitor.config import load_default_config
 from sell_monitor.data.provider_factory import build_market_data_provider
+from sell_monitor.monitor.obsidian_backfill import backfill_missing_obsidian_records
 from sell_monitor.monitor.sell_monitor_service import SellMonitorService
 from sell_monitor.notifier.alert_dispatcher import ConsoleAlertDispatcher, ConsoleChannel
 from sell_monitor.notifier.channels.email import EmailChannel
@@ -63,10 +64,25 @@ def main() -> int:
         user_rule_store=user_rule_store,
         notifier=notifier,
     )
+    symbols = [args.symbol] if args.symbol else watchlist_store.load()
+    if obsidian_recorder:
+        backfill_notices = backfill_missing_obsidian_records(
+            provider=provider,
+            recorder=obsidian_recorder,
+            symbols=symbols,
+            positions=position_store.load_all(),
+            rules=user_rule_store.load_all(),
+            current_time=current_time,
+        )
+        for notice in backfill_notices:
+            print(notice)
     try:
         result = service.run(symbol_filter=args.symbol)
     except Exception as exc:
         print(f"运行失败：{exc}")
+        close = getattr(provider, "close", None)
+        if callable(close):
+            close()
         return 1
     all_notices = []
     if hasattr(provider, "consume_notices"):
@@ -77,10 +93,18 @@ def main() -> int:
         all_notices.append(notice)
         print(notice)
     if obsidian_recorder:
-        symbols = [args.symbol] if args.symbol else watchlist_store.load()
-        obsidian_recorder.write_run(symbols=symbols, decisions=result.decisions, notices=all_notices)
+        obsidian_recorder.write_run(
+            symbols=symbols,
+            decisions=result.decisions,
+            notices=all_notices,
+            zone_snapshots=result.zone_snapshots,
+            daily_bar_snapshots=result.daily_bar_snapshots,
+        )
     for decision in result.decisions:
         notifier.dispatch(decision)
+    close = getattr(provider, "close", None)
+    if callable(close):
+        close()
     return 0
 
 

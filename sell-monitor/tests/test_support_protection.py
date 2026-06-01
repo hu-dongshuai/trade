@@ -9,6 +9,7 @@ from sell_monitor.scoring.support_protection import (
     apply_a_level_support_bias_filter,
     apply_exit_support_protection,
     apply_support_protection,
+    find_ab_level_support_bias,
     find_a_level_support_bias,
     find_protective_daily_support,
 )
@@ -149,3 +150,56 @@ class SupportProtectionTest(unittest.TestCase):
         adjusted = apply_a_level_support_bias_filter(decision, context)
 
         self.assertEqual(Action.EXIT_ALL, adjusted.action)
+
+    def test_b_level_support_bias_filters_reduce_when_closer_to_support(self) -> None:
+        support = PriceZone("support_b", "1d", 98, 100, 5, ZoneLevel.B, ["support"], 4)
+        resistance = PriceZone("resistance_b", "1d", 108, 110, 5, ZoneLevel.B, ["resistance"], 4)
+        context = DailyContext("TEST", 101.0, [support, resistance], None, "up", "neutral", "neutral")
+        decision = Decision("TEST", Action.REDUCE, 5, Priority.HIGH, ["减仓信号"], "减仓", "信号消失")
+
+        adjusted = apply_a_level_support_bias_filter(decision, context)
+
+        self.assertEqual(Action.HOLD, adjusted.action)
+        self.assertIn("B级支撑偏置过滤", adjusted.reasons[-1])
+        self.assertIsNotNone(find_ab_level_support_bias(101.0, [support, resistance]))
+
+    def test_b_level_support_bias_filters_exit_when_closer_to_support(self) -> None:
+        support = PriceZone("support_b", "1d", 98, 100, 5, ZoneLevel.B, ["support"], 4)
+        resistance = PriceZone("resistance_b", "1d", 108, 110, 5, ZoneLevel.B, ["resistance"], 4)
+        context = DailyContext("TEST", 101.0, [support, resistance], None, "up", "neutral", "neutral")
+        decision = Decision("TEST", Action.EXIT_ALL, 6, Priority.IMMEDIATE, ["清仓信号"], "清仓", "信号消失")
+
+        adjusted = apply_a_level_support_bias_filter(decision, context)
+
+        self.assertEqual(Action.HOLD, adjusted.action)
+
+    def test_support_bias_compares_nearest_pressure_across_levels(self) -> None:
+        support = PriceZone("support_b", "1d", 98, 100, 5, ZoneLevel.B, ["support"], 4)
+        far_b_resistance = PriceZone("resistance_b", "1d", 112, 114, 5, ZoneLevel.B, ["resistance"], 4)
+        near_a_resistance = PriceZone("resistance_a", "1d", 103, 105, 8, ZoneLevel.A, ["resistance"], 5)
+        context = DailyContext(
+            "TEST",
+            102.5,
+            [support, far_b_resistance, near_a_resistance],
+            None,
+            "up",
+            "neutral",
+            "neutral",
+        )
+        decision = Decision("TEST", Action.REDUCE, 5, Priority.HIGH, ["减仓信号"], "减仓", "信号消失")
+
+        adjusted = apply_a_level_support_bias_filter(decision, context)
+
+        self.assertEqual(Action.REDUCE, adjusted.action)
+
+    def test_support_bias_can_compare_b_support_with_c_pressure(self) -> None:
+        support = PriceZone("support_b", "1d", 98, 100, 5, ZoneLevel.B, ["support"], 4)
+        resistance = PriceZone("resistance_c", "1d", 108, 110, 3, ZoneLevel.C, ["resistance"], 2)
+        context = DailyContext("TEST", 101.0, [support, resistance], None, "up", "neutral", "neutral")
+        decision = Decision("TEST", Action.REDUCE, 5, Priority.HIGH, ["减仓信号"], "减仓", "信号消失")
+
+        adjusted = apply_a_level_support_bias_filter(decision, context)
+
+        self.assertEqual(Action.HOLD, adjusted.action)
+        self.assertIn("B级支撑偏置过滤", adjusted.reasons[-1])
+        self.assertIn("日线C级压力区", adjusted.reasons[-1])

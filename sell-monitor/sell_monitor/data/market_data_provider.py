@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from sell_monitor.domain.models import Bar, Quote
+from sell_monitor.domain.models import Bar, FundamentalSnapshot, Quote
 
 
 class MarketDataProvider(Protocol):
@@ -23,6 +23,10 @@ class MarketDataProvider(Protocol):
 
     def get_sector_state(self, symbol: str) -> str: ...
 
+    def get_fundamental_snapshot(self, symbol: str) -> FundamentalSnapshot | None: ...
+
+    def get_fundamental_snapshot_until(self, symbol: str, end_dt: datetime) -> FundamentalSnapshot | None: ...
+
 
 def _parse_bar(item: dict[str, object]) -> Bar:
     return Bar(
@@ -32,6 +36,37 @@ def _parse_bar(item: dict[str, object]) -> Bar:
         low=float(item["low"]),
         close=float(item["close"]),
         volume=float(item["volume"]),
+    )
+
+
+def _parse_optional_float(item: dict[str, object], key: str) -> float | None:
+    value = item.get(key)
+    if value is None or value == "":
+        return None
+    return float(value)
+
+
+def _parse_fundamental(symbol: str, item: dict[str, object]) -> FundamentalSnapshot:
+    report_date_raw = item.get("report_date")
+    return FundamentalSnapshot(
+        symbol=symbol,
+        ts=datetime.fromisoformat(str(item.get("ts") or datetime.now().isoformat())),
+        report_date=(datetime.fromisoformat(str(report_date_raw)) if report_date_raw else None),
+        revenue_yoy=_parse_optional_float(item, "revenue_yoy"),
+        previous_revenue_yoy=_parse_optional_float(item, "previous_revenue_yoy"),
+        net_profit_yoy=_parse_optional_float(item, "net_profit_yoy"),
+        deducted_net_profit_yoy=_parse_optional_float(item, "deducted_net_profit_yoy"),
+        previous_deducted_net_profit_yoy=_parse_optional_float(item, "previous_deducted_net_profit_yoy"),
+        gross_margin=_parse_optional_float(item, "gross_margin"),
+        previous_gross_margin=_parse_optional_float(item, "previous_gross_margin"),
+        net_margin=_parse_optional_float(item, "net_margin"),
+        previous_net_margin=_parse_optional_float(item, "previous_net_margin"),
+        roe=_parse_optional_float(item, "roe"),
+        operating_cashflow_to_profit=_parse_optional_float(item, "operating_cashflow_to_profit"),
+        debt_asset_ratio=_parse_optional_float(item, "debt_asset_ratio"),
+        pe_percentile=_parse_optional_float(item, "pe_percentile"),
+        event_risk=bool(item.get("event_risk", False)),
+        event_note=(str(item["event_note"]) if item.get("event_note") else None),
     )
 
 
@@ -68,3 +103,22 @@ class StaticMarketDataProvider:
 
     def get_sector_state(self, symbol: str) -> str:
         return str(self._data["symbols"][symbol].get("sector_state", "neutral"))
+
+    def get_fundamental_snapshot(self, symbol: str) -> FundamentalSnapshot | None:
+        payload = self._data["symbols"][symbol].get("fundamentals")
+        if not payload:
+            return None
+        if isinstance(payload, list):
+            payload = payload[-1]
+        return _parse_fundamental(symbol, payload)
+
+    def get_fundamental_snapshot_until(self, symbol: str, end_dt: datetime) -> FundamentalSnapshot | None:
+        payload = self._data["symbols"][symbol].get("fundamentals")
+        if not payload:
+            return None
+        if isinstance(payload, list):
+            items = [item for item in payload if datetime.fromisoformat(str(item.get("report_date") or item["ts"])) <= end_dt]
+            if not items:
+                return None
+            payload = items[-1]
+        return _parse_fundamental(symbol, payload)

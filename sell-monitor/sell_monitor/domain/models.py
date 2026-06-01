@@ -63,6 +63,37 @@ class UserRule:
     entry_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class FundamentalSnapshot:
+    symbol: str
+    ts: datetime
+    report_date: datetime | None = None
+    revenue_yoy: float | None = None
+    previous_revenue_yoy: float | None = None
+    net_profit_yoy: float | None = None
+    deducted_net_profit_yoy: float | None = None
+    previous_deducted_net_profit_yoy: float | None = None
+    gross_margin: float | None = None
+    previous_gross_margin: float | None = None
+    net_margin: float | None = None
+    previous_net_margin: float | None = None
+    roe: float | None = None
+    operating_cashflow_to_profit: float | None = None
+    debt_asset_ratio: float | None = None
+    pe_percentile: float | None = None
+    event_risk: bool = False
+    event_note: str | None = None
+
+
+@dataclass(frozen=True)
+class FundamentalAssessment:
+    symbol: str
+    level: str
+    quality_score: float
+    score_adjustment: int
+    reasons: list[str]
+
+
 @dataclass
 class PriceZone:
     name: str
@@ -73,6 +104,9 @@ class PriceZone:
     level: ZoneLevel = ZoneLevel.D
     tags: list[str] = field(default_factory=list)
     touches: int = 0
+    importance_score: int = 0
+    fragility_score: int = 0
+    invalidation_price: float | None = None
 
     def overlaps(self, other: "PriceZone") -> bool:
         return self.low <= other.high and other.low <= self.high
@@ -91,6 +125,9 @@ class PriceZone:
             level=self.level,
             tags=merged_tags,
             touches=max(self.touches, other.touches),
+            importance_score=max(self.importance_score, other.importance_score),
+            fragility_score=max(self.fragility_score, other.fragility_score),
+            invalidation_price=self.invalidation_price,
         )
 
 
@@ -111,6 +148,7 @@ class DailyContext:
     daily_trend: str
     market_state: str
     sector_state: str
+    daily_bars: list[Bar] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -128,3 +166,5 @@ class Decision:
 class MonitorRunResult:
     decisions: list[Decision]
     notices: list[str]
+    zone_snapshots: dict[str, list[PriceZone]] = field(default_factory=dict)
+    daily_bar_snapshots: dict[str, list[Bar]] = field(default_factory=dict)

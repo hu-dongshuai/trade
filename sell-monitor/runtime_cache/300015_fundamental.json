@@ -1,0 +1,21 @@
+{
+  "saved_at": "2026-06-01T09:46:05.263127",
+  "symbol": "300015",
+  "ts": "2026-06-01T09:46:05.262064",
+  "report_date": "2026-03-31T00:00:00",
+  "revenue_yoy": null,
+  "previous_revenue_yoy": null,
+  "net_profit_yoy": null,
+  "deducted_net_profit_yoy": null,
+  "previous_deducted_net_profit_yoy": null,
+  "gross_margin": null,
+  "previous_gross_margin": null,
+  "net_margin": 20.5531,
+  "previous_net_margin": 15.5383,
+  "roe": 5.12,
+  "operating_cashflow_to_profit": 1.2993,
+  "debt_asset_ratio": 32.7198,
+  "pe_percentile": null,
+  "event_risk": false,
+  "event_note": null
+}

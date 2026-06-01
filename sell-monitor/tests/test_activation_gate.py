@@ -21,7 +21,36 @@ class ActivationGateTest(unittest.TestCase):
         active = find_active_zone(102.3, 1.0, [zone])
         self.assertIsNotNone(active)
 
+    def test_c_level_resistance_can_activate_monitoring(self) -> None:
+        zone = PriceZone(
+            name="daily_resistance_c",
+            timeframe="1d",
+            low=100.0,
+            high=102.0,
+            score=3,
+            level=ZoneLevel.C,
+            tags=["resistance", "daily_fibonacci"],
+        )
+
+        active = find_active_zone(101.5, 1.0, [zone])
+
+        self.assertIsNotNone(active)
+
+    def test_c_level_support_does_not_activate_monitoring(self) -> None:
+        zone = PriceZone(
+            name="daily_support_c",
+            timeframe="1d",
+            low=100.0,
+            high=102.0,
+            score=3,
+            level=ZoneLevel.C,
+            tags=["support"],
+        )
+
+        active = find_active_zone(101.5, 1.0, [zone])
+
+        self.assertIsNone(active)
+
 
 if __name__ == "__main__":
     unittest.main()
-

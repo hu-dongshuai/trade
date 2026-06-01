@@ -35,6 +35,14 @@ class _PrimaryOk:
         return "neutral"
 
 
+class _PrimaryLongHistory(_PrimaryOk):
+    def get_m15_bars(self, symbol: str, limit: int = 200) -> list[Bar]:
+        return [
+            Bar(datetime(2026, 5, 27, 14, 45, 0), 10.0, 10.2, 9.9, 10.1, 100),
+            Bar(datetime(2026, 5, 27, 15, 0, 0), 10.1, 10.4, 10.0, 10.3, 120),
+        ]
+
+
 class _PrimaryFail:
     def get_latest_quote(self, symbol: str):
         raise MarketDataError("fail")
@@ -83,6 +91,26 @@ class FallbackProviderTest(unittest.TestCase):
             self.assertEqual(1, len(bars))
             self.assertTrue(any("已命中本地缓存15分钟数据" in item for item in provider.consume_notices()))
 
+    def test_updates_network_when_cached_bars_are_not_enough(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = FileMarketDataCache(Path(tmp))
+            cache.save_bars(
+                "002241",
+                "15m",
+                [Bar(datetime(2026, 5, 27, 14, 30, 0), 10.0, 10.1, 9.9, 10.0, 100)],
+            )
+            provider = CachedFallbackMarketDataProvider(_PrimaryLongHistory(), cache)
+
+            bars = provider.get_m15_bars("002241", limit=2)
+
+            self.assertEqual(2, len(bars))
+            self.assertEqual(datetime(2026, 5, 27, 15, 0, 0), bars[-1].ts)
+            notices = provider.consume_notices()
+            self.assertTrue(any("缓存15分钟数据不足" in item for item in notices))
+            cached = cache.load_bars("002241", "15m")
+            self.assertIsNotNone(cached)
+            self.assertEqual(3, len(cached))
+
     def test_uses_cached_historical_m15_when_primary_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cache = FileMarketDataCache(Path(tmp))
@@ -125,4 +153,5 @@ class FallbackProviderTest(unittest.TestCase):
             self.assertTrue(export_path.exists())
             content = export_path.read_text(encoding="utf-8")
             self.assertIn("# 002241 日线关键价位", content)
-            self.assertIn("| A | daily_sr_1 | 27.80 | 28.60 | 5 | resistance, daily_fvg | 3 |", content)
+            self.assertIn("| 周期 | 等级 | 名称 | 区间下沿 | 区间上沿 | 净分 | 重要性 | 脆弱性 | 失效价 | 触达次数 | 标签 |", content)
+            self.assertIn("| 1d | A | daily_sr_1 | 27.80 | 28.60 | 5 | 0 | 0 | - | 3 | resistance, daily_fvg |", content)

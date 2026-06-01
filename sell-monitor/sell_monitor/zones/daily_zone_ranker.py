@@ -14,30 +14,87 @@ def _overlap_ratio(a: PriceZone, b: PriceZone) -> float:
     return overlap / width
 
 
+def _best_overlap(zone: PriceZone, zones: list[PriceZone]) -> PriceZone | None:
+    matches = [other for other in zones if _overlap_ratio(zone, other) > 0.20]
+    if not matches:
+        return None
+    return max(matches, key=lambda other: _overlap_ratio(zone, other))
+
+
 def rank_daily_zones(
     sr_zones: list[PriceZone],
     fvg_zones: list[PriceZone],
     liquidity_zones: list[PriceZone],
     order_blocks: list[PriceZone],
+    weekly_resistance_zones: list[PriceZone] | None = None,
+    fibonacci_zones: list[PriceZone] | None = None,
 ) -> list[PriceZone]:
+    weekly_resistance_zones = weekly_resistance_zones or []
+    fibonacci_zones = fibonacci_zones or []
     ranked = [zone for zone in sr_zones]
     for zone in ranked:
-        if any(_overlap_ratio(zone, other) > 0.25 for other in fvg_zones):
-            zone.score += 2
+        importance = max(zone.importance_score, zone.score)
+        fragility = zone.fragility_score
+        fvg = _best_overlap(zone, fvg_zones)
+        liquidity = _best_overlap(zone, liquidity_zones)
+        order_block = _best_overlap(zone, order_blocks)
+        weekly = _best_overlap(zone, weekly_resistance_zones) if "resistance" in zone.tags else None
+        fibonacci = _best_overlap(zone, fibonacci_zones) if "resistance" in zone.tags else None
+
+        if fvg is not None:
+            importance += 3
             zone.tags.append("with_fvg")
-        if any(_overlap_ratio(zone, other) > 0.25 for other in liquidity_zones):
-            zone.score += 2
+            if "fresh_fvg" in fvg.tags:
+                importance += 1
+                zone.tags.append("with_fresh_fvg")
+            elif "partially_filled_fvg" in fvg.tags:
+                zone.tags.append("with_partially_filled_fvg")
+            if zone.invalidation_price is None:
+                zone.invalidation_price = fvg.invalidation_price
+        if liquidity is not None:
+            importance += 2
             zone.tags.append("with_liquidity")
-        if any(_overlap_ratio(zone, other) > 0.25 for other in order_blocks):
-            zone.score += 1
+            fragility += 1
+            if "large_liquidity" in liquidity.tags:
+                importance += 1
+                zone.tags.append("with_large_liquidity")
+        if order_block is not None:
+            importance += 1
             zone.tags.append("with_order_block")
-        if zone.score >= 6:
+        if fibonacci is not None:
+            importance += 1
+            zone.tags.append("with_fibonacci")
+        if weekly is not None:
+            importance += 2
+            zone.tags.append("with_weekly_resistance")
+
+        net_score = max(0, importance - min(fragility, 2))
+        zone.importance_score = importance
+        zone.fragility_score = fragility
+        zone.score = net_score
+
+        has_fvg = "with_fvg" in zone.tags
+        has_liquidity = "with_liquidity" in zone.tags
+        if net_score >= 7 and has_fvg and (has_liquidity or zone.touches >= 3):
             zone.level = ZoneLevel.A
-        elif zone.score >= 4:
+        elif net_score >= 5 and (has_fvg or has_liquidity):
             zone.level = ZoneLevel.B
-        elif zone.score >= 2:
+        elif net_score >= 3:
             zone.level = ZoneLevel.C
         else:
             zone.level = ZoneLevel.D
-    return sorted(ranked, key=lambda zone: (zone.level, -zone.score), reverse=False)
+        if weekly is not None:
+            zone.level = _promote_one_level(zone.level)
+    ranked.extend(fibonacci_zones)
+    ranked.extend(weekly_resistance_zones)
+    return sorted(ranked, key=lambda zone: (zone.level, -zone.score, zone.fragility_score), reverse=False)
 
+
+def _promote_one_level(level: ZoneLevel) -> ZoneLevel:
+    if level == ZoneLevel.D:
+        return ZoneLevel.C
+    if level == ZoneLevel.C:
+        return ZoneLevel.B
+    if level == ZoneLevel.B:
+        return ZoneLevel.A
+    return ZoneLevel.A
