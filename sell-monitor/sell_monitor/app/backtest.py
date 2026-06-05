@@ -15,14 +15,9 @@ from sell_monitor.monitor.daily_context_builder import build_daily_context_from_
 from sell_monitor.monitor.intraday_monitor import run_intraday_monitor
 from sell_monitor.notifier.zone_table_formatter import format_multi_symbol_zone_tables
 from sell_monitor.scoring.decision_engine import build_decision
-from sell_monitor.scoring.fundamental_weight import apply_fundamental_weight, load_fundamental_assessment
 from sell_monitor.scoring.hard_rule_engine import evaluate_hard_rules
+from sell_monitor.scoring.hold_protection import apply_hold_protection_reference
 from sell_monitor.scoring.score_engine import compute_score
-from sell_monitor.scoring.support_protection import (
-    apply_a_level_support_bias_filter,
-    apply_exit_support_protection,
-    apply_support_protection,
-)
 from sell_monitor.storage.position_store import JsonPositionStore
 from sell_monitor.storage.user_rule_store import JsonUserRuleStore
 from sell_monitor.storage.watchlist_store import JsonWatchlistStore
@@ -31,9 +26,11 @@ from sell_monitor.storage.watchlist_store import JsonWatchlistStore
 @dataclass(frozen=True)
 class BacktestEvent:
     symbol: str
+    symbol_name: str | None
     as_of_date: str
     action: Action
     score: int
+    hold_protection_score: int
     price: float
     drawdown_15d: float
     runup_15d: float
@@ -99,6 +96,7 @@ def run_backtest(
     notices: list[str] = []
     zone_snapshots = {}
     for symbol in symbols:
+        symbol_name = getattr(provider, "get_symbol_name", lambda s: s)(symbol)
         try:
             daily_bars = provider.get_daily_bars(symbol, limit=5000)
             m15_bars = provider.get_m15_bars(symbol, limit=5000)
@@ -117,7 +115,7 @@ def run_backtest(
         if earliest_m15.date() > start_dt.date():
             notices.append(
                 f"[{symbol}] 15分钟数据最早仅到 {earliest_m15.strftime('%Y-%m-%d %H:%M:%S')}，"
-                f"早于该时间的回测日期会自动跳过"
+                "早于该时间的回测日期会自动跳过"
             )
 
         position = positions.get(symbol) or Position(symbol=symbol, cost_price=daily_bars[0].close, quantity=1)
@@ -144,7 +142,7 @@ def run_backtest(
                 continue
             decision = _build_backtest_decision(provider, symbol, daily_until, m15_until, position, rules.get(symbol), as_of_dt)
             future_daily = [bar for bar in daily_bars if bar.ts.date() > day_bar.ts.date()]
-            symbol_events.append(_build_event(symbol, day_bar, decision, future_daily))
+            symbol_events.append(_build_event(symbol, symbol_name, day_bar, decision, future_daily))
         events.extend(_adjust_missed_after_prior_sell_alerts(symbol_events))
     return BacktestResult(events=events, notices=notices, zone_snapshots=zone_snapshots)
 
@@ -178,13 +176,13 @@ def format_backtest_report(result: BacktestResult, start_date: str, end_date: st
         [
             "## 明细",
             "",
-            "| 日期 | 股票 | 动作 | 分数 | 价格 | 15日最大回撤 | 15日最大上涨 | 结果 | 原因 |",
-            "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- |",
+            "| 日期 | 股票代码 | 股票名称 | 动作 | 分数 | 持有保护分 | 价格 | 15日最大回撤 | 15日最大上涨 | 结果 | 原因 |",
+            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |",
         ]
     )
     for event in result.events:
         lines.append(
-            f"| {event.as_of_date} | {event.symbol} | {event.action.value} | {event.score} | {event.price:.2f} | "
+            f"| {event.as_of_date} | {event.symbol} | {event.symbol_name or event.symbol} | {event.action.value} | {event.score} | {event.hold_protection_score} | {event.price:.2f} | "
             f"{event.drawdown_15d:.2f}% | {event.runup_15d:.2f}% | {event.outcome} | {event.reason} |"
         )
     return "\n".join(lines) + "\n"
@@ -214,6 +212,7 @@ def _build_backtest_decision(
     as_of_dt: datetime,
 ) -> Decision:
     current_price = m15_bars[-1].close
+    symbol_name = getattr(provider, "get_symbol_name", lambda s: s)(symbol)
     daily_context = build_daily_context_from_data(
         symbol=symbol,
         current_price=current_price,
@@ -233,33 +232,33 @@ def _build_backtest_decision(
             reasons=["当日未接近日线 A/B 级关键价位或 C 级压力位"],
             next_step="继续观察",
             cancel_condition="重新接近日线关键价位后再评估",
+            symbol_name=symbol_name,
+            current_price=current_price,
         )
     signals = run_intraday_monitor(daily_context, daily_bars, m15_bars)
-    hard = evaluate_hard_rules(symbol, current_price, position, rule, signals)
-    decision = hard or build_decision(symbol, compute_score(signals), signals)
-    if hard is None:
-        decision = apply_fundamental_weight(decision, load_fundamental_assessment(provider, symbol, as_of_dt))
-    decision = apply_exit_support_protection(decision, daily_context, daily_bars)
-    decision = apply_support_protection(
-        decision,
-        daily_context,
-        daily_bars,
-        m15_bars,
+    hard = evaluate_hard_rules(symbol, current_price, position, rule, signals, symbol_name=symbol_name)
+    decision = hard or build_decision(
+        symbol,
+        compute_score(signals),
         signals,
+        symbol_name=symbol_name,
+        current_price=current_price,
     )
-    return apply_a_level_support_bias_filter(decision, daily_context)
+    return apply_hold_protection_reference(decision, daily_context, daily_bars, m15_bars)
 
 
-def _build_event(symbol: str, day_bar: Bar, decision: Decision, future_daily: list[Bar]) -> BacktestEvent:
+def _build_event(symbol: str, symbol_name: str | None, day_bar: Bar, decision: Decision, future_daily: list[Bar]) -> BacktestEvent:
     price = day_bar.close
     drawdown_15d = _max_drawdown_pct(price, future_daily[:15])
     runup_15d = _max_runup_pct(price, future_daily[:15])
     outcome = _classify_outcome(decision.action, drawdown_15d, runup_15d)
     return BacktestEvent(
         symbol=symbol,
+        symbol_name=symbol_name,
         as_of_date=day_bar.ts.strftime("%Y-%m-%d"),
         action=decision.action,
         score=decision.total_score,
+        hold_protection_score=decision.hold_protection_score,
         price=price,
         drawdown_15d=drawdown_15d,
         runup_15d=runup_15d,
@@ -275,9 +274,11 @@ def _adjust_missed_after_prior_sell_alerts(events: list[BacktestEvent]) -> list[
             adjusted.append(
                 BacktestEvent(
                     symbol=event.symbol,
+                    symbol_name=event.symbol_name,
                     as_of_date=event.as_of_date,
                     action=event.action,
                     score=event.score,
+                    hold_protection_score=event.hold_protection_score,
                     price=event.price,
                     drawdown_15d=event.drawdown_15d,
                     runup_15d=event.runup_15d,

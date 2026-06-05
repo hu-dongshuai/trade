@@ -160,6 +160,10 @@ class Decision:
     reasons: list[str]
     next_step: str
     cancel_condition: str
+    symbol_name: str | None = None
+    current_price: float | None = None
+    hold_protection_score: int = 0
+    hold_protection_reasons: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

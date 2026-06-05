@@ -36,18 +36,36 @@ class _FailingProvider:
 
 
 class SellMonitorServiceTest(unittest.TestCase):
-    def test_reports_notice_when_symbol_has_no_position(self) -> None:
+    def test_watchlist_store_supports_symbol_name_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            watchlist_path = tmp_path / "watchlist.json"
+            watchlist_path.write_text(
+                json.dumps(
+                    {
+                        "symbols": [
+                            {"symbol": "002241", "name": "歌尔股份"},
+                            "300015",
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            store = JsonWatchlistStore(watchlist_path)
+
+            self.assertEqual(["002241", "300015"], store.load())
+            self.assertEqual({"002241": "歌尔股份"}, store.load_name_map())
+
+    def test_runs_without_positions_file(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         provider = StaticMarketDataProvider(project_root / "examples" / "market_data.json")
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             (tmp_path / "watchlist.json").write_text(
-                json.dumps({"symbols": ["NOPOS"]}, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            (tmp_path / "positions.json").write_text(
-                json.dumps({"positions": []}, ensure_ascii=False),
+                json.dumps({"symbols": ["TESTA"]}, ensure_ascii=False),
                 encoding="utf-8",
             )
             (tmp_path / "user_rules.json").write_text(
@@ -65,10 +83,10 @@ class SellMonitorServiceTest(unittest.TestCase):
 
             result = service.run()
 
-        self.assertEqual([], result.decisions)
-        self.assertIn("[NOPOS] 未持仓，已跳过", result.notices)
+        self.assertEqual([], result.notices)
+        self.assertEqual(1, len(result.decisions))
 
-    def test_auto_adds_symbol_to_watchlist_and_positions_when_filtered(self) -> None:
+    def test_auto_adds_symbol_to_watchlist_when_filtered(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         provider = StaticMarketDataProvider(project_root / "examples" / "market_data.json")
 
@@ -76,10 +94,6 @@ class SellMonitorServiceTest(unittest.TestCase):
             tmp_path = Path(tmp)
             (tmp_path / "watchlist.json").write_text(
                 json.dumps({"symbols": []}, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            (tmp_path / "positions.json").write_text(
-                json.dumps({"positions": []}, ensure_ascii=False),
                 encoding="utf-8",
             )
             (tmp_path / "user_rules.json").write_text(
@@ -97,24 +111,15 @@ class SellMonitorServiceTest(unittest.TestCase):
 
             result = service.run(symbol_filter="TESTA")
             watchlist_data = json.loads((tmp_path / "watchlist.json").read_text(encoding="utf-8"))
-            positions_data = json.loads((tmp_path / "positions.json").read_text(encoding="utf-8"))
 
         self.assertIn("[TESTA] 不在 watchlist.json 中，已自动加入", result.notices)
-        self.assertTrue(
-            any("未持仓，已按当前价" in notice and "自动加入持仓" in notice for notice in result.notices)
-        )
         self.assertIn("TESTA", watchlist_data["symbols"])
-        self.assertEqual("TESTA", positions_data["positions"][0]["symbol"])
 
     def test_returns_friendly_notice_when_market_data_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             (tmp_path / "watchlist.json").write_text(
                 json.dumps({"symbols": []}, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            (tmp_path / "positions.json").write_text(
-                json.dumps({"positions": []}, ensure_ascii=False),
                 encoding="utf-8",
             )
             (tmp_path / "user_rules.json").write_text(

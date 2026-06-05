@@ -9,14 +9,9 @@ from sell_monitor.domain.models import Bar, Decision, Position, PriceZone, UserR
 from sell_monitor.monitor.daily_context_builder import build_daily_context_from_data
 from sell_monitor.monitor.intraday_monitor import run_intraday_monitor
 from sell_monitor.scoring.decision_engine import build_decision
-from sell_monitor.scoring.fundamental_weight import apply_fundamental_weight, load_fundamental_assessment
 from sell_monitor.scoring.hard_rule_engine import evaluate_hard_rules
+from sell_monitor.scoring.hold_protection import apply_hold_protection_reference
 from sell_monitor.scoring.score_engine import compute_score
-from sell_monitor.scoring.support_protection import (
-    apply_a_level_support_bias_filter,
-    apply_exit_support_protection,
-    apply_support_protection,
-)
 
 
 @dataclass(frozen=True)
@@ -35,6 +30,7 @@ def build_replay_decision(
     rule: UserRule | None,
 ) -> ReplayDecisionResult:
     daily_bars, m15_bars, quote_price, _ = _load_replay_market_data(provider, symbol, as_of_dt)
+    symbol_name = getattr(provider, "get_symbol_name", lambda s: s)(symbol)
     notices: list[str] = []
     daily_context = build_daily_context_from_data(
         symbol=symbol,
@@ -54,7 +50,9 @@ def build_replay_decision(
             priority=Priority.NORMAL,
             reasons=["当时未接近日线 A/B 级关键价位或 C 级压力位"],
             next_step="继续观察，等待价格进入高优先级关键价位或 C 级压力位附近",
-            cancel_condition="若后续接近日线 A/B 级关键价位或 C 级压力位，再重新评估15分钟卖出信号",
+            cancel_condition="若后续接近日线 A/B 级关键价位或 C 级压力位，再重新评估 15 分钟卖出信号",
+            symbol_name=symbol_name,
+            current_price=quote_price,
         )
         return ReplayDecisionResult(
             decision=decision,
@@ -70,16 +68,19 @@ def build_replay_decision(
         position=position,
         rule=rule,
         signals=signals,
+        symbol_name=symbol_name,
     )
     if hard:
-        decision = apply_exit_support_protection(hard, daily_context, daily_bars)
-        decision = apply_support_protection(decision, daily_context, daily_bars, m15_bars, signals)
-        decision = apply_a_level_support_bias_filter(decision, daily_context)
+        decision = apply_hold_protection_reference(hard, daily_context, daily_bars, m15_bars)
     else:
-        decision = build_decision(symbol, compute_score(signals), signals)
-        decision = apply_fundamental_weight(decision, load_fundamental_assessment(provider, symbol, as_of_dt))
-        decision = apply_support_protection(decision, daily_context, daily_bars, m15_bars, signals)
-        decision = apply_a_level_support_bias_filter(decision, daily_context)
+        decision = build_decision(
+            symbol,
+            compute_score(signals),
+            signals,
+            symbol_name=symbol_name,
+            current_price=daily_context.current_price,
+        )
+        decision = apply_hold_protection_reference(decision, daily_context, daily_bars, m15_bars)
     return ReplayDecisionResult(
         decision=decision,
         notices=notices,

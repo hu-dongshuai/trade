@@ -184,6 +184,18 @@ class AkshareMarketDataProvider:
     def get_sector_state(self, symbol: str) -> str:
         return "neutral"
 
+    def get_symbol_name(self, symbol: str) -> str:
+        normalized_symbol = _normalize_symbol(symbol)
+        try:
+            spot_df = _call_with_retry("stock_zh_a_spot_em", self.ak.stock_zh_a_spot_em)
+            row = spot_df.loc[spot_df["代码"].astype(str) == normalized_symbol]
+            if row.empty:
+                return normalized_symbol
+            latest = row.iloc[-1]
+            return str(latest.get("名称") or normalized_symbol)
+        except Exception:
+            return normalized_symbol
+
     def get_fundamental_snapshot(self, symbol: str) -> FundamentalSnapshot | None:
         return self._get_fundamental_snapshot(symbol, None)
 

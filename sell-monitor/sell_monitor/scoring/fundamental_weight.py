@@ -114,6 +114,8 @@ def apply_fundamental_weight(decision: Decision, assessment: FundamentalAssessme
         reasons=decision.reasons + assessment.reasons,
         next_step=next_step,
         cancel_condition=cancel_condition,
+        symbol_name=decision.symbol_name,
+        current_price=decision.current_price,
     )
 
 

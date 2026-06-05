@@ -69,6 +69,9 @@ class BaostockMarketDataProvider:
             f"[{normalized_symbol}] BaoStock 历史15分钟数据为空，无法覆盖 {end_dt.strftime('%Y-%m-%d %H:%M:%S')}。"
         )
 
+    def get_symbol_name(self, symbol: str) -> str:
+        return _normalize_symbol(symbol)
+
     def _query_history_rows(
         self,
         symbol: str,

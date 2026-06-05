@@ -144,6 +144,15 @@ class CachedFallbackMarketDataProvider:
         self.cache.save_state(key, value)
         return value
 
+    def get_symbol_name(self, symbol: str) -> str:
+        method = getattr(self.primary_provider, "get_symbol_name", None)
+        if method is None:
+            return symbol
+        try:
+            return method(symbol)
+        except Exception:
+            return symbol
+
     def get_fundamental_snapshot(self, symbol: str):
         cached = self.cache.load_fundamental_snapshot(symbol, max_age_seconds=self.FUNDAMENTAL_TTL_SECONDS)
         if cached:

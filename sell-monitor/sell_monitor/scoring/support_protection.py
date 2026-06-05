@@ -40,13 +40,12 @@ def apply_support_protection(
         priority=Priority.NORMAL,
         reasons=decision.reasons
         + [
-            (
-                f"强支撑保护过滤：当前仍位于日线{support.level.value}级支撑区 "
-                f"{support.low:.2f}-{support.high:.2f} 上方，普通减仓信号降级为观察"
-            )
+            f"强支撑保护过滤：当前仍位于日线{support.level.value}级支撑区 {support.low:.2f}-{support.high:.2f} 上方，普通减仓信号降级为观察"
         ],
         next_step="支撑保护区上方暂不减仓，继续观察；若放量跌破支撑或15分钟MA20，再重新评估卖出",
         cancel_condition="跌破日线A/B级支撑区下沿，或出现第三根危险上影线、突破失败、放量跌破15分钟MA20",
+        symbol_name=decision.symbol_name,
+        current_price=decision.current_price,
     )
 
 
@@ -71,13 +70,12 @@ def apply_exit_support_protection(
         priority=Priority.HIGH,
         reasons=decision.reasons
         + [
-            (
-                f"强支撑保护过滤：当前仍位于日线{support.level.value}级支撑区 "
-                f"{support.low:.2f}-{support.high:.2f} 上方，第三根上影线清仓信号降级为减仓"
-            )
+            f"强支撑保护过滤：当前仍位于日线{support.level.value}级支撑区 {support.low:.2f}-{support.high:.2f} 上方，第三根上影线清仓信号降级为减仓"
         ],
         next_step="先减仓50%；若放量跌破日线A/B级支撑区下沿或15分钟MA20无法收回，再执行清仓",
         cancel_condition="价格继续站稳日线A/B级支撑区和15分钟MA20，且危险上影线信号不再延续",
+        symbol_name=decision.symbol_name,
+        current_price=decision.current_price,
     )
 
 
@@ -104,18 +102,12 @@ def apply_a_level_support_bias_filter(
         priority=Priority.NORMAL,
         reasons=decision.reasons
         + [
-            (
-                f"{support_level}级支撑偏置过滤：当前价未跌破日线{support_level}级支撑区 "
-                f"{support.low:.2f}-{support.high:.2f}，距离支撑约 {support_distance:.2f}，"
-                f"距离日线{resistance_level}级压力区 {resistance.low:.2f}-{resistance.high:.2f} 约 {resistance_distance:.2f}，"
-                "当前更靠近支撑，暂不报告该卖出动作"
-            )
+            f"{support_level}级支撑偏置过滤：当前价未跌破日线{support_level}级支撑区 {support.low:.2f}-{support.high:.2f}，距离支撑约 {support_distance:.2f}，距离日线{resistance_level}级压力区 {resistance.low:.2f}-{resistance.high:.2f} 约 {resistance_distance:.2f}，当前更靠近支撑，暂不报告该卖出动作"
         ],
-        next_step=(
-            f"支撑上方继续观察；只有跌破该{support_level}级支撑区下沿，"
-            f"或重新靠近日线{resistance_level}级压力区并出现破位确认后再评估卖出"
-        ),
+        next_step=f"支撑上方继续观察；只有跌破该{support_level}级支撑区下沿，或重新靠近{resistance_level}级压力区并出现破位确认后再评估卖出",
         cancel_condition=f"跌破日线{support_level}级支撑区下沿，或价格更接近日线{resistance_level}级压力区",
+        symbol_name=decision.symbol_name,
+        current_price=decision.current_price,
     )
 
 

@@ -4,6 +4,7 @@ from typing import Protocol
 
 from sell_monitor.domain.models import Decision
 from sell_monitor.notifier.alert_formatter import format_decision
+from sell_monitor.notifier.symbol_display import display_symbol
 
 
 class AlertChannel(Protocol):
@@ -22,6 +23,9 @@ class ConsoleAlertDispatcher:
 
     def dispatch(self, decision: Decision) -> None:
         message = format_decision(decision)
-        subject = f"{self.subject_prefix} {decision.symbol} {decision.action.value} score={decision.total_score}"
+        subject = (
+            f"{self.subject_prefix} {display_symbol(decision.symbol, decision.symbol_name)} "
+            f"{decision.action.value} score={decision.total_score}"
+        )
         for channel in self.channels:
             channel.send(subject, message)

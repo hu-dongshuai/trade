@@ -59,6 +59,10 @@ SELL_MONITOR_OBSIDIAN_MONITOR_ENABLED=true
 SELL_MONITOR_OBSIDIAN_MONITOR_DIR=E:\tools\OB\Obsidian\Trade\notes\monitor
 ```
 
+If you want to write monitor logs to another vault or directory, set
+`SELL_MONITOR_OBSIDIAN_MONITOR_DIR` in `.env`. The loader also supports
+`SELL_MONITOR_ENV_FILE` to point to an alternate env file path.
+
 Each run prepends the newest result to `{symbol}.md`, so the latest monitor result is always at the top.
 
 When `SELL_MONITOR_PROVIDER=akshare`, the tool fetches:

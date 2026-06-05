@@ -27,6 +27,8 @@ class AlertDispatcherTest(unittest.TestCase):
             reasons=["15分钟出现危险上影线"],
             next_step="减仓",
             cancel_condition="信号消失",
+            hold_protection_score=2,
+            hold_protection_reasons=["当前仍位于日线A级支撑上方"],
         )
 
         dispatcher.dispatch(decision)
@@ -35,3 +37,5 @@ class AlertDispatcherTest(unittest.TestCase):
         subject, message = channel.messages[0]
         self.assertIn("[Test] TESTA reduce score=4", subject)
         self.assertIn("15分钟出现危险上影线", message)
+        self.assertNotIn("hold_protection", message)
+        self.assertNotIn("priority=", message)

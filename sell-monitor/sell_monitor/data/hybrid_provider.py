@@ -31,6 +31,12 @@ class HybridMarketDataProvider:
     def get_sector_state(self, symbol: str) -> str:
         return self.live_provider.get_sector_state(symbol)
 
+    def get_symbol_name(self, symbol: str) -> str:
+        method = getattr(self.live_provider, "get_symbol_name", None)
+        if method is None:
+            return symbol
+        return method(symbol)
+
     def get_fundamental_snapshot(self, symbol: str):
         method = getattr(self.live_provider, "get_fundamental_snapshot", None)
         if method is None:

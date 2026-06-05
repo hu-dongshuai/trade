@@ -11,6 +11,8 @@ class JsonPositionStore:
         self.path = path
 
     def load_all(self) -> dict[str, Position]:
+        if not self.path.exists():
+            return {}
         data = json.loads(self.path.read_text(encoding="utf-8-sig"))
         result: dict[str, Position] = {}
         for item in data["positions"]:

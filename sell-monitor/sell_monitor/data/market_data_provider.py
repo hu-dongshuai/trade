@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from sell_monitor.domain.models import Bar, FundamentalSnapshot, Quote
+from sell_monitor.notifier.symbol_display import normalize_symbol_name
 
 
 class MarketDataProvider(Protocol):
@@ -22,6 +23,8 @@ class MarketDataProvider(Protocol):
     def get_market_state(self) -> str: ...
 
     def get_sector_state(self, symbol: str) -> str: ...
+
+    def get_symbol_name(self, symbol: str) -> str: ...
 
     def get_fundamental_snapshot(self, symbol: str) -> FundamentalSnapshot | None: ...
 
@@ -103,6 +106,12 @@ class StaticMarketDataProvider:
 
     def get_sector_state(self, symbol: str) -> str:
         return str(self._data["symbols"][symbol].get("sector_state", "neutral"))
+
+    def get_symbol_name(self, symbol: str) -> str:
+        payload = self._data["symbols"].get(symbol)
+        if not payload:
+            return symbol
+        return normalize_symbol_name(symbol, str(payload.get("name", symbol))) or symbol
 
     def get_fundamental_snapshot(self, symbol: str) -> FundamentalSnapshot | None:
         payload = self._data["symbols"][symbol].get("fundamentals")

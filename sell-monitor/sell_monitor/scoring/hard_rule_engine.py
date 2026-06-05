@@ -19,6 +19,7 @@ def evaluate_hard_rules(
     position: Position,
     rule: UserRule | None,
     signals: list[Signal],
+    symbol_name: str | None = None,
 ) -> Decision | None:
     if rule and rule.stop_loss is not None and current_price <= rule.stop_loss:
         return Decision(
@@ -28,7 +29,9 @@ def evaluate_hard_rules(
             priority=Priority.IMMEDIATE,
             reasons=[f"当前价格跌破预设止损位 {rule.stop_loss:.2f}"],
             next_step="立即执行止损卖出",
-            cancel_condition="价格重新站回止损位上方且确认是假跌破",
+            cancel_condition="价格重新站回止损位上方，且确认是假跌破",
+            symbol_name=symbol_name,
+            current_price=current_price,
         )
     if rule and rule.hard_exit_note:
         return Decision(
@@ -39,6 +42,8 @@ def evaluate_hard_rules(
             reasons=[f"用户设置了硬性清仓规则：{rule.hard_exit_note}"],
             next_step="立即清仓",
             cancel_condition="仅在用户手动取消硬性清仓规则后撤销",
+            symbol_name=symbol_name,
+            current_price=current_price,
         )
     names = {signal.name for signal in signals if signal.triggered}
     if "third_dangerous_upper_wick" in names:
@@ -55,7 +60,9 @@ def evaluate_hard_rules(
                 priority=Priority.IMMEDIATE,
                 reasons=["出现第三根危险上影线"] + confirmation_reasons,
                 next_step="清仓；第三根危险上影线已获得破位确认",
-                cancel_condition="价格快速收回15分钟MA20和关键价位上方，且破位确认为假跌破",
+                cancel_condition="价格快速收回 15 分钟 MA20 和关键价位上方，且确认是假破位",
+                symbol_name=symbol_name,
+                current_price=current_price,
             )
         return Decision(
             symbol=symbol,
@@ -63,7 +70,9 @@ def evaluate_hard_rules(
             total_score=5,
             priority=Priority.HIGH,
             reasons=["出现第三根危险上影线，但尚未出现破位确认"],
-            next_step="先减仓50%；等待跌破15分钟MA20、结构低点或关键价位后再清仓",
-            cancel_condition="价格继续站稳15分钟MA20和关键价位，且后续上影线信号消失",
+            next_step="先减仓 50%；等待跌破 15 分钟 MA20、结构低点或关键价位后再清仓",
+            cancel_condition="价格继续站稳 15 分钟 MA20 和关键价位，且后续上影线信号消失",
+            symbol_name=symbol_name,
+            current_price=current_price,
         )
     return None

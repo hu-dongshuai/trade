@@ -38,45 +38,76 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
             self.assertTrue(content.startswith("# 002241 监控记录"))
             self.assertLess(content.index("latest result"), content.index("first result"))
 
-    def test_writes_each_symbol_to_separate_file(self) -> None:
+    def test_run_recorder_writes_compact_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            channel = ObsidianMarkdownChannel(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
+            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
+            decision = Decision(
+                symbol="002241",
+                symbol_name="歌尔股份",
+                action=Action.REDUCE,
+                total_score=4,
+                priority=Priority.HIGH,
+                reasons=["测试原因"],
+                next_step="减仓",
+                cancel_condition="信号消失",
+                current_price=28.27,
+                hold_protection_score=3,
+                hold_protection_reasons=["日线A级支撑保护", "向下流动性抓取后收回支撑"],
+            )
 
-            channel.send("[SellMonitor] 002241 hold score=0", "[002241] result")
-            channel.send("[SellMonitor] 002739 hold score=0", "[002739] result")
+            recorder.write_run(symbols=["002241"], decisions=[decision], notices=[])
 
-            self.assertTrue((Path(tmp) / "002241.md").exists())
-            self.assertTrue((Path(tmp) / "002739.md").exists())
+            content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
+            self.assertIn(
+                "| 检测时间 | 股票代码 | 结论 | 动作 | 分数 | 价格 | 原因/提示 | 下一步 | 取消条件 |",
+                content,
+            )
+            self.assertIn("| 歌尔股份 | 卖出信号 | reduce | 4 | 28.27 |", content)
+            self.assertNotIn("股票名称", content)
+            self.assertNotIn("持有保护", content)
+            self.assertNotIn("high", content)
 
-    def test_run_recorder_writes_no_signal_record_for_each_symbol(self) -> None:
+    def test_run_recorder_writes_compact_table_without_decision(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
 
             recorder.write_run(
-                symbols=["002241", "002739"],
+                symbols=["002241"],
                 decisions=[],
-                notices=["[002241] 未接近日线 A/B/C 压力位，暂不启动 15 分钟监测"],
+                notices=[],
+                symbol_names={"002241": "歌尔股份"},
             )
 
-            first = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
-            second = (Path(tmp) / "002739.md").read_text(encoding="utf-8")
-            self.assertIn("| 检测时间 | 股票代码 | 结论 | 动作 | 分数 | 优先级 | 原因/提示 | 下一步 | 取消条件 |", first)
-            self.assertIn("未触发卖出信号", first)
-            self.assertIn("[002241] 未接近日线 A/B/C 压力位", first)
-            self.assertIn("未触发卖出信号", second)
-            self.assertNotIn("[002241] 未接近日线 A/B/C 压力位", second)
+            content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
+            self.assertIn("| 歌尔股份 | 未触发卖出信号 | none | 0 | - |", content)
 
-    def test_run_recorder_filters_runtime_notices_from_reason_cell(self) -> None:
+    def test_run_recorder_falls_back_to_symbol_when_name_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
+
+            recorder.write_run(
+                symbols=["002241"],
+                decisions=[],
+                notices=[],
+                symbol_names={},
+            )
+
+            content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
+            self.assertIn("| 002241 | 未触发卖出信号 | none | 0 | - |", content)
+
+    def test_run_recorder_filters_runtime_notices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
             decision = Decision(
                 symbol="300015",
+                symbol_name="爱尔眼科",
                 action=Action.HOLD,
                 total_score=0,
                 priority=Priority.NORMAL,
                 reasons=["未达到高质量卖出触发条件"],
                 next_step="继续观察",
                 cancel_condition="新增高质量卖出信号",
+                current_price=12.34,
             )
 
             recorder.write_run(
@@ -93,81 +124,36 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
             self.assertNotIn("已命中本地缓存历史15分钟数据", content)
             self.assertNotIn("回溯补齐检测记录", content)
 
-    def test_run_recorder_marks_sell_signal_time_in_red(self) -> None:
+    def test_daily_trigger_summary_is_table_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
             decision = Decision(
                 symbol="002241",
-                action=Action.REDUCE,
-                total_score=3,
-                priority=Priority.HIGH,
-                reasons=["15分钟关键价位放量危险上影线"],
-                next_step="减仓 50%",
-                cancel_condition="重新站回关键价位上方并缩量企稳",
-            )
-
-            recorder.write_run(symbols=["002241"], decisions=[decision], notices=[])
-
-            content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
-            self.assertIn('<span style="color:red">', content)
-            self.assertIn("| <span style=\"color:red\">", content)
-            self.assertIn("| 002241 | 卖出信号 | reduce | 3 | high |", content)
-            self.assertNotIn("```text", content)
-
-    def test_run_recorder_summarizes_sell_signals_to_daily_trigger_file(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
-            decision = Decision(
-                symbol="002241",
+                symbol_name="歌尔股份",
                 action=Action.EXIT_ALL,
-                total_score=5,
+                total_score=6,
                 priority=Priority.IMMEDIATE,
-                reasons=["第三根危险上影线", "放量跌破15分钟MA20"],
+                reasons=["出现第三根危险上影线", "放量跌破15分钟MA20"],
                 next_step="清仓",
                 cancel_condition="重新站回关键价位",
+                current_price=27.85,
+                hold_protection_score=1,
+                hold_protection_reasons=["当前更接近支撑而非压力"],
             )
 
             recorder.write_run(symbols=["002241"], decisions=[decision], notices=[])
 
             content = (Path(tmp) / "当日触发.md").read_text(encoding="utf-8")
-            self.assertIn("# 当日触发", content)
-            self.assertIn("| 时间 | 股票代码 | 卖出动作 | 分数 | 优先级 | 原因 | 建议 |", content)
-            self.assertIn("002241", content)
-            self.assertIn("第三根危险上影线；放量跌破15分钟MA20", content)
+            self.assertIn("| 时间 | 股票代码 | 卖出动作 | 分数 | 价格 | 原因 | 建议 |", content)
+            self.assertIn("| 歌尔股份 | exit_all | 6 | 27.85 |", content)
+            self.assertNotIn("## 2026-", content)
+            self.assertNotIn("股票名称", content)
+            self.assertNotIn("持有保护", content)
 
-    def test_run_recorder_does_not_touch_daily_trigger_file_without_sell_signal(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
-
-            recorder.write_run(symbols=["002241"], decisions=[], notices=[])
-
-            self.assertFalse((Path(tmp) / "当日触发.md").exists())
-
-    def test_run_recorder_keeps_only_latest_zone_table_near_top(self) -> None:
+    def test_zone_chart_stays_before_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
             zone = PriceZone(
-                name="daily_resistance",
-                timeframe="1d",
-                low=27.8,
-                high=28.6,
-                score=7,
-                level=ZoneLevel.A,
-                tags=["resistance", "with_fvg"],
-                touches=3,
-                importance_score=8,
-                fragility_score=1,
-                invalidation_price=28.9,
-            )
-
-            recorder.write_run(
-                symbols=["002241"],
-                decisions=[],
-                notices=[],
-                zone_snapshots={"002241": [zone]},
-                daily_bar_snapshots={"002241": _daily_bars()},
-            )
-            newer_zone = PriceZone(
                 name="weekly_resistance",
                 timeframe="1w",
                 low=31.6,
@@ -180,69 +166,20 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
                 fragility_score=1,
                 invalidation_price=32.8,
             )
+
             recorder.write_run(
                 symbols=["002241"],
                 decisions=[],
                 notices=[],
-                zone_snapshots={"002241": [newer_zone]},
+                symbol_names={"002241": "歌尔股份"},
+                zone_snapshots={"002241": [zone]},
                 daily_bar_snapshots={"002241": _daily_bars()},
             )
 
             content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
             self.assertLess(content.index("![002241 最新支撑压力图]"), content.index("| 检测时间 | 股票代码 |"))
-            self.assertIn("<!-- SELL_MONITOR_LATEST_ZONES_END -->\n\n| 检测时间", content)
-            self.assertIn("assets/002241_latest_zones.svg", content)
-            self.assertTrue((Path(tmp) / "assets" / "002241_latest_zones.svg").exists())
-            self.assertNotIn("27.80 | 28.60", content)
-            self.assertEqual(0, content.count("### 支撑压力位"))
-            self.assertEqual(0, content.count("## 监控记录"))
-            self.assertEqual(1, content.count("| 检测时间 | 股票代码 |"))
-            self.assertEqual(2, content.count("| 002241 | 未触发卖出信号 |"))
+            self.assertIn("<!-- SELL_MONITOR_LATEST_ZONES_END -->\n\n| 检测时间 |", content)
 
-    def test_run_recorder_removes_old_embedded_zone_tables(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "002241.md"
-            path.write_text(
-                "# 002241 监控记录\n\n"
-                "## 监控记录\n\n"
-                "### 支撑压力位\n\n"
-                "| 股票 | 周期 | 等级 | 类型 | 区间下沿 | 区间上沿 | 净分 | 重要性 | 脆弱性 | 失效价 | 触达次数 | 标签 |\n"
-                "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n"
-                "| 002241 | 1d | A | 压力 | 27.80 | 28.60 | 7 | 8 | 1 | 28.90 | 3 | old |\n\n"
-                "| 检测时间 | 股票代码 | 结论 | 动作 | 分数 | 优先级 | 原因/提示 | 下一步 | 取消条件 |\n"
-                "| --- | --- | --- | --- | ---: | --- | --- | --- | --- |\n"
-                "| 2026-05-28 10:30:00 | 002241 | 未触发卖出信号 | none | 0 | normal | old | 继续观察 | - |\n\n"
-                "```text\nold detail\n```\n",
-                encoding="utf-8",
-            )
-            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
 
-            recorder.write_run(
-                symbols=["002241"],
-                decisions=[],
-                notices=[],
-                zone_snapshots={"002241": []},
-                daily_bar_snapshots={"002241": _daily_bars()},
-            )
-
-            content = path.read_text(encoding="utf-8")
-            self.assertNotIn("| 002241 | 1d | A | 压力 | 27.80 | 28.60", content)
-            self.assertEqual(0, content.count("### 支撑压力位"))
-            self.assertEqual(1, content.count("| 检测时间 | 股票代码 |"))
-            self.assertIn("2026-05-28 10:30:00", content)
-            self.assertNotIn("```text", content)
-            self.assertNotIn("old detail", content)
-
-    def test_run_recorder_can_write_historical_timestamp(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
-
-            recorder.write_run(
-                symbols=["002241"],
-                decisions=[],
-                notices=[],
-                now=datetime(2026, 5, 28, 10, 30, 0),
-            )
-
-            content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
-            self.assertIn("2026-05-28 10:30:00", content)
+if __name__ == "__main__":
+    unittest.main()

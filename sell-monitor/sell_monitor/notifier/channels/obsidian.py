@@ -7,14 +7,15 @@ from pathlib import Path
 from sell_monitor.config import ObsidianMonitorConfig
 from sell_monitor.domain.enums import Action
 from sell_monitor.domain.models import Bar, Decision, PriceZone
+from sell_monitor.notifier.symbol_display import normalize_symbol_name
 from sell_monitor.notifier.zone_chart_renderer import render_weekly_zone_chart
 
 
 SELL_SIGNAL_ACTIONS = {Action.REDUCE, Action.STOP_LOSS, Action.EXIT_ALL}
 LATEST_ZONES_START = "<!-- SELL_MONITOR_LATEST_ZONES_START -->"
 LATEST_ZONES_END = "<!-- SELL_MONITOR_LATEST_ZONES_END -->"
-MONITOR_TABLE_HEADER = "| 检测时间 | 股票代码 | 结论 | 动作 | 分数 | 优先级 | 原因/提示 | 下一步 | 取消条件 |"
-MONITOR_TABLE_SEPARATOR = "| --- | --- | --- | --- | ---: | --- | --- | --- | --- |"
+MONITOR_TABLE_HEADER = "| 检测时间 | 股票代码 | 结论 | 动作 | 分数 | 价格 | 原因/提示 | 下一步 | 取消条件 |"
+MONITOR_TABLE_SEPARATOR = "| --- | --- | --- | --- | ---: | ---: | --- | --- | --- |"
 
 
 class ObsidianMarkdownChannel:
@@ -39,6 +40,7 @@ class ObsidianMonitorRunRecorder:
         symbols: list[str],
         decisions: list[Decision],
         notices: list[str],
+        symbol_names: dict[str, str] | None = None,
         zone_snapshots: dict[str, list[PriceZone]] | None = None,
         daily_bar_snapshots: dict[str, list[Bar]] | None = None,
         now: datetime | None = None,
@@ -46,6 +48,7 @@ class ObsidianMonitorRunRecorder:
         self.monitor_dir.mkdir(parents=True, exist_ok=True)
         decisions_by_symbol = {decision.symbol: decision for decision in decisions}
         notices_by_symbol = _group_notices_by_symbol(notices)
+        symbol_names = symbol_names or {}
         zone_snapshots = zone_snapshots or {}
         daily_bar_snapshots = daily_bar_snapshots or {}
         now = now or datetime.now()
@@ -62,6 +65,7 @@ class ObsidianMonitorRunRecorder:
                 symbol=safe_symbol,
                 decision=decisions_by_symbol.get(symbol),
                 notices=notices_by_symbol.get(symbol, []),
+                symbol_name=symbol_names.get(symbol),
                 now=now,
             )
             path.write_text(_prepend_monitor_run(previous, row, safe_symbol, chart_ref), encoding="utf-8")
@@ -105,6 +109,7 @@ def _format_run_row(
     symbol: str,
     decision: Decision | None,
     notices: list[str],
+    symbol_name: str | None,
     now: datetime,
 ) -> str:
     now_text = now.strftime("%Y-%m-%d %H:%M:%S")
@@ -112,13 +117,14 @@ def _format_run_row(
     time_cell = _format_time_cell(now_text, has_sell_signal)
     action = decision.action.value if decision else "none"
     score = str(decision.total_score) if decision else "0"
-    priority = decision.priority.value if decision else "normal"
+    price = _format_price_cell(decision.current_price if decision else None)
     conclusion = "卖出信号" if has_sell_signal else "未触发卖出信号"
     reason = _summarize_reasons(decision, notices)
     next_step = decision.next_step if decision else "继续观察"
     cancel_condition = decision.cancel_condition if decision else "-"
+    display_value = normalize_symbol_name(symbol, decision.symbol_name if decision else symbol_name) or symbol
     return (
-        f"| {time_cell} | {symbol} | {conclusion} | {action} | {score} | {priority} | "
+        f"| {time_cell} | {display_value} | {conclusion} | {action} | {score} | {price} | "
         f"{_table_cell(reason)} | {_table_cell(next_step)} | {_table_cell(cancel_condition)} |"
     )
 
@@ -157,25 +163,22 @@ def _write_daily_trigger_summary(monitor_dir: Path, decisions: list[Decision], n
 
 def _format_daily_trigger_entry(decisions: list[Decision], now: datetime) -> str:
     now_text = now.strftime("%Y-%m-%d %H:%M:%S")
-    date_text = now.strftime("%Y-%m-%d")
     lines = [
-        f"## {date_text} {now_text}",
-        "",
-        "| 时间 | 股票代码 | 卖出动作 | 分数 | 优先级 | 原因 | 建议 |",
-        "| --- | --- | --- | ---: | --- | --- | --- |",
+        "| 时间 | 股票代码 | 卖出动作 | 分数 | 价格 | 原因 | 建议 |",
+        "| --- | --- | --- | ---: | ---: | --- | --- |",
     ]
     for decision in decisions:
+        display_value = normalize_symbol_name(decision.symbol, decision.symbol_name) or decision.symbol
         lines.append(
-            f"| {_format_time_cell(now_text, True)} | {decision.symbol} | {decision.action.value} | "
-            f"{decision.total_score} | {decision.priority.value} | {_table_cell(_join_reasons(decision.reasons))} | "
-            f"{_table_cell(decision.next_step)} |"
+            f"| {_format_time_cell(now_text, True)} | {display_value} | {decision.action.value} | {decision.total_score} | {_format_price_cell(decision.current_price)} | "
+            f"{_table_cell(_join_reasons(decision.reasons))} | {_table_cell(decision.next_step)} |"
         )
     lines.append("")
     return "\n".join(lines)
 
 
 def _summarize_reasons(decision: Decision | None, notices: list[str]) -> str:
-    parts = []
+    parts: list[str] = []
     if decision:
         parts.extend(decision.reasons)
     parts.extend(_visible_notices(notices))
@@ -208,6 +211,12 @@ def _join_reasons(reasons: list[str]) -> str:
 
 def _table_cell(value: str) -> str:
     return value.replace("\r", " ").replace("\n", "<br>").replace("|", "\\|").strip() or "-"
+
+
+def _format_price_cell(price: float | None) -> str:
+    if price is None:
+        return "-"
+    return f"{price:.2f}"
 
 
 def _prepend_entry(previous: str, entry: str) -> str:

@@ -65,11 +65,17 @@ def main() -> int:
         notifier=notifier,
     )
     symbols = [args.symbol] if args.symbol else watchlist_store.load()
+    watchlist_name_map = watchlist_store.load_name_map()
+    symbol_names = {
+        symbol: watchlist_name_map.get(symbol) or getattr(provider, "get_symbol_name", lambda s: s)(symbol)
+        for symbol in symbols
+    }
     if obsidian_recorder:
         backfill_notices = backfill_missing_obsidian_records(
             provider=provider,
             recorder=obsidian_recorder,
             symbols=symbols,
+            symbol_names=symbol_names,
             positions=position_store.load_all(),
             rules=user_rule_store.load_all(),
             current_time=current_time,
@@ -97,6 +103,7 @@ def main() -> int:
             symbols=symbols,
             decisions=result.decisions,
             notices=all_notices,
+            symbol_names=symbol_names,
             zone_snapshots=result.zone_snapshots,
             daily_bar_snapshots=result.daily_bar_snapshots,
         )

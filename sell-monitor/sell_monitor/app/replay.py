@@ -15,11 +15,11 @@ from sell_monitor.monitor.daily_context_builder import build_daily_context_from_
 from sell_monitor.monitor.intraday_monitor import run_intraday_monitor
 from sell_monitor.monitor.replay_decision import _load_replay_market_data
 from sell_monitor.notifier.alert_formatter import format_decision
+from sell_monitor.notifier.symbol_display import display_symbol
 from sell_monitor.scoring.decision_engine import build_decision
-from sell_monitor.scoring.fundamental_weight import apply_fundamental_weight, load_fundamental_assessment
 from sell_monitor.scoring.hard_rule_engine import evaluate_hard_rules
+from sell_monitor.scoring.hold_protection import apply_hold_protection_reference
 from sell_monitor.scoring.score_engine import compute_score
-from sell_monitor.scoring.support_protection import apply_support_protection
 from sell_monitor.storage.position_store import JsonPositionStore
 from sell_monitor.storage.user_rule_store import JsonUserRuleStore
 
@@ -44,6 +44,7 @@ def main() -> int:
     config = load_default_config(args.base_dir)
     provider = build_market_data_provider(config)
     cache = FileMarketDataCache(config.cache_dir)
+    symbol_name = getattr(provider, "get_symbol_name", lambda s: s)(args.symbol)
 
     try:
         daily_bars, m15_bars, quote_price, quote_ts = _load_replay_market_data(provider, args.symbol, as_of_dt)
@@ -94,6 +95,8 @@ def main() -> int:
             reasons=["当日未接近日线 A/B 级关键价位或 C 级压力位"],
             next_step="继续观察，等待价格进入高优先级关键价位或 C 级压力位附近",
             cancel_condition="若后续接近日线 A/B 级关键价位或 C 级压力位，再重新评估15分钟卖出信号",
+            symbol_name=symbol_name,
+            current_price=quote_price,
         )
     else:
         signals = run_intraday_monitor(daily_context, daily_bars, m15_bars)
@@ -103,16 +106,22 @@ def main() -> int:
             position=position,
             rule=rules.get(args.symbol),
             signals=signals,
+            symbol_name=symbol_name,
         )
         if hard:
             decision = hard
         else:
-            decision = build_decision(args.symbol, compute_score(signals), signals)
-            decision = apply_fundamental_weight(decision, load_fundamental_assessment(provider, args.symbol, as_of_dt))
-            decision = apply_support_protection(decision, daily_context, daily_bars, m15_bars, signals)
+            decision = build_decision(
+                args.symbol,
+                compute_score(signals),
+                signals,
+                symbol_name=symbol_name,
+                current_price=daily_context.current_price,
+            )
+        decision = apply_hold_protection_reference(decision, daily_context, daily_bars, m15_bars)
 
     print(f"Replay as of {args.as_of_date} 15:00:00")
-    print(f"symbol: {args.symbol}")
+    print(f"symbol: {display_symbol(args.symbol, symbol_name)}")
     print(f"quote: {quote_price:.2f} @ {quote_ts.strftime('%Y-%m-%d %H:%M:%S')}")
     if daily_context.active_zone:
         zone = daily_context.active_zone
