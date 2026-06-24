@@ -15,6 +15,12 @@ def detect_structure_break(bars: list[Bar]) -> Signal | None:
         return None
     structure_low = prior_lows[-1][1].low
     if bars[-1].close < structure_low:
-        return Signal("structure_break", 2, True, "跌破最近一次创出新高后的回调低点")
+        return Signal(
+            "structure_break",
+            2,
+            True,
+            "跌破最近一次创出新高后的回调低点",
+            triggered_at=bars[-1].ts,
+            trigger_price=bars[-1].close,
+        )
     return None
-

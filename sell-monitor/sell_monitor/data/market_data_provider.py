@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
+from sell_monitor.data.akshare_provider import MarketDataError
 from sell_monitor.domain.models import Bar, FundamentalSnapshot, Quote
 from sell_monitor.notifier.symbol_display import normalize_symbol_name
 
@@ -76,9 +77,19 @@ def _parse_fundamental(symbol: str, item: dict[str, object]) -> FundamentalSnaps
 class StaticMarketDataProvider:
     def __init__(self, path: Path) -> None:
         self._data = json.loads(path.read_text(encoding="utf-8"))
+        self._path = path
+
+    def _symbol_payload(self, symbol: str) -> dict[str, object]:
+        payload = self._data["symbols"].get(symbol)
+        if payload is None:
+            raise MarketDataError(
+                f"[{symbol}] 当前使用的是静态数据源 static，但样例数据文件 {self._path} 中不存在该股票。"
+                " 请检查 SELL_MONITOR_PROVIDER 是否被错误设置，或切换回 akshare/baostock。"
+            )
+        return payload
 
     def get_latest_quote(self, symbol: str) -> Quote:
-        payload = self._data["symbols"][symbol]["quote"]
+        payload = self._symbol_payload(symbol)["quote"]
         return Quote(
             symbol=symbol,
             price=float(payload["price"]),
@@ -86,11 +97,11 @@ class StaticMarketDataProvider:
         )
 
     def get_daily_bars(self, symbol: str, limit: int = 200) -> list[Bar]:
-        bars = self._data["symbols"][symbol]["daily_bars"][-limit:]
+        bars = self._symbol_payload(symbol)["daily_bars"][-limit:]
         return [_parse_bar(item) for item in bars]
 
     def get_m15_bars(self, symbol: str, limit: int = 200) -> list[Bar]:
-        bars = self._data["symbols"][symbol]["m15_bars"][-limit:]
+        bars = self._symbol_payload(symbol)["m15_bars"][-limit:]
         return [_parse_bar(item) for item in bars]
 
     def get_daily_bars_until(self, symbol: str, end_dt: datetime, limit: int = 200) -> list[Bar]:
@@ -105,7 +116,7 @@ class StaticMarketDataProvider:
         return str(self._data["market"]["state"])
 
     def get_sector_state(self, symbol: str) -> str:
-        return str(self._data["symbols"][symbol].get("sector_state", "neutral"))
+        return str(self._symbol_payload(symbol).get("sector_state", "neutral"))
 
     def get_symbol_name(self, symbol: str) -> str:
         payload = self._data["symbols"].get(symbol)
@@ -114,7 +125,7 @@ class StaticMarketDataProvider:
         return normalize_symbol_name(symbol, str(payload.get("name", symbol))) or symbol
 
     def get_fundamental_snapshot(self, symbol: str) -> FundamentalSnapshot | None:
-        payload = self._data["symbols"][symbol].get("fundamentals")
+        payload = self._symbol_payload(symbol).get("fundamentals")
         if not payload:
             return None
         if isinstance(payload, list):
@@ -122,7 +133,7 @@ class StaticMarketDataProvider:
         return _parse_fundamental(symbol, payload)
 
     def get_fundamental_snapshot_until(self, symbol: str, end_dt: datetime) -> FundamentalSnapshot | None:
-        payload = self._data["symbols"][symbol].get("fundamentals")
+        payload = self._symbol_payload(symbol).get("fundamentals")
         if not payload:
             return None
         if isinstance(payload, list):

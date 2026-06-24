@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from sell_monitor.domain.models import UserRule
+from sell_monitor.storage.markdown_config import read_json_payload
 
 
 class JsonUserRuleStore:
@@ -11,7 +11,9 @@ class JsonUserRuleStore:
         self.path = path
 
     def load_all(self) -> dict[str, UserRule]:
-        data = json.loads(self.path.read_text(encoding="utf-8-sig"))
+        if not self.path.exists():
+            return {}
+        data = read_json_payload(self.path)
         result: dict[str, UserRule] = {}
         for item in data["rules"]:
             result[item["symbol"]] = UserRule(

@@ -46,6 +46,7 @@ class IntradayMonitorTest(unittest.TestCase):
 
         self.assertIsNotNone(signal)
         self.assertEqual("m15_ma20_high_volume_break", signal.name)
+        self.assertIn("14:45", signal.reason)
 
     def test_ignores_single_bar_break_below_m15_ma20(self) -> None:
         start = datetime(2026, 5, 28, 9, 30)

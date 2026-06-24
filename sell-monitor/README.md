@@ -1,20 +1,15 @@
 # Sell Monitor
 
-A local-first, rule-based sell-monitor project for Chinese stock trading workflows.
+A local-first, rule-based A-share monitor project with two parallel capabilities:
 
-The project follows a two-layer process:
+- sell monitoring
+- long-entry checking
 
-1. Use daily bars to build and rank major key price zones.
-2. Only when price approaches an A/B daily zone, run 15-minute sell triggers.
+The project follows a layered process:
 
-The package ships with:
-
-- a pluggable market data provider interface
-- a static JSON provider for local development
-- an AkShare live provider for A-share market data
-- a rule engine for zones, signals, scoring, and final decisions
-- sample data and unit tests
-- console output, Obsidian Markdown logs, and SMTP email alert delivery
+1. Use daily and weekly bars to build and rank major key price zones.
+2. Use 15-minute structure only when price reaches meaningful daily context.
+3. Write results to terminal and Obsidian.
 
 ## Quick Start
 
@@ -23,95 +18,84 @@ cd sell-monitor
 python -m sell_monitor.app.main
 ```
 
-Or after installation:
+## Core Configuration
 
-```bash
-sell-monitor
-```
+Configuration is loaded from `.env` in the project root by default.
 
-## AkShare and email
-
-The default provider is `static`, which reads from `examples/market_data.json`.
-
-To switch to AkShare, either export environment variables or copy `.env.example` to `.env`.
-
-Minimal `.env`:
+### Provider
 
 ```dotenv
 SELL_MONITOR_PROVIDER=akshare
 ```
 
-To enable SMTP email alerts:
+Available values:
 
-```dotenv
-SELL_MONITOR_SMTP_HOST=smtp.example.com
-SELL_MONITOR_SMTP_PORT=587
-SELL_MONITOR_SMTP_USERNAME=you@example.com
-SELL_MONITOR_SMTP_PASSWORD=your-app-password
-SELL_MONITOR_EMAIL_FROM=you@example.com
-SELL_MONITOR_EMAIL_TO=you@example.com
-```
+- `static`
+- `akshare`
+- `baostock`
 
-Obsidian monitor logs are enabled by default and are written one file per symbol:
+### Obsidian Sell Monitor Output
 
 ```dotenv
 SELL_MONITOR_OBSIDIAN_MONITOR_ENABLED=true
-SELL_MONITOR_OBSIDIAN_MONITOR_DIR=E:\tools\OB\Obsidian\Trade\notes\monitor
+SELL_MONITOR_OBSIDIAN_MONITOR_DIR=E:\tools\OB\Obsidian\Trade\notes\monitor\sell
 ```
 
-If you want to write monitor logs to another vault or directory, set
-`SELL_MONITOR_OBSIDIAN_MONITOR_DIR` in `.env`. The loader also supports
-`SELL_MONITOR_ENV_FILE` to point to an alternate env file path.
+### Obsidian Entry Monitor Output
 
-Each run prepends the newest result to `{symbol}.md`, so the latest monitor result is always at the top.
+```dotenv
+SELL_MONITOR_OBSIDIAN_ENTRY_ENABLED=true
+SELL_MONITOR_OBSIDIAN_ENTRY_DIR=E:\tools\OB\Obsidian\Trade\notes\monitor\entry
+```
 
-When `SELL_MONITOR_PROVIDER=akshare`, the tool fetches:
+### Obsidian Watchlists
 
-- latest A-share quote from `stock_zh_a_spot_em()`
-- daily bars from `stock_zh_a_hist()`
-- 15-minute bars from `stock_zh_a_hist_min_em()`
+The project now uses two separate watchlists in Obsidian:
 
-## Backup data path
+```dotenv
+SELL_MONITOR_SELL_WATCHLIST_PATH=E:\tools\OB\Obsidian\Trade\notes\monitor\config\sell-watchlist.md
+SELL_MONITOR_ENTRY_WATCHLIST_PATH=E:\tools\OB\Obsidian\Trade\notes\monitor\config\entry-watchlist.md
+```
 
-The AkShare path now uses a three-level fallback chain:
+- sell monitor reads `sell-watchlist.md`
+- entry monitor reads `entry-watchlist.md`
+- if one symbol should appear in both workflows, add it to both files
 
-1. Eastmoney-backed AkShare endpoints
-2. Sina-backed AkShare endpoints
-3. Local cache in `runtime_cache/`
+Format example:
 
-If the live endpoints fail but cached data exists, the tool falls back to the last successful local snapshot and prints a notice in the terminal.
+```json
+{
+  "symbols": [
+    { "symbol": "002241", "name": "歌尔股份" },
+    { "symbol": "300015", "name": "爱尔眼科" },
+    "300014"
+  ]
+}
+```
 
-## Helper scripts
+## Helper Scripts
 
-Run the main monitor:
+### Sell monitor
 
 ```powershell
 .\scripts\run_akshare.ps1
-```
-
-Run continuously once per hour:
-
-```powershell
 .\scripts\run_akshare.ps1 -Loop -IntervalSeconds 3600
-```
-
-Run a live smoke test for Goertek (`002241`):
-
-```powershell
-C:\Users\admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe .\scripts\smoke_goertek_002241.py
-```
-
-Replay historical advice for one stock and one date:
-
-```powershell
 .\scripts\replay_advice.ps1 -Symbol 002241 -AsOfDate 2026-05-20
+.\scripts\backtest_strategy.ps1 -Symbols "002241,002739" -StartDate 2025-11-20 -EndDate 2026-05-27
 ```
 
-Batch backtest the sell strategy and write a Markdown report:
+### Entry monitor
 
 ```powershell
-.\scripts\backtest_strategy.ps1 -Symbols 002241,002739 -StartDate 2025-11-20 -EndDate 2026-05-27
+.\scripts\scan_entry.ps1
+.\scripts\scan_entry.ps1 -Symbol 002241
+.\scripts\scan_entry.ps1 -Loop -IntervalSeconds 3600
+.\scripts\replay_entry.ps1 -Symbol 002241 -AsOfDate 2026-05-20
+.\scripts\backtest_entry.ps1 -Symbols "002241,300015" -StartDate 2025-11-20 -EndDate 2026-05-27
 ```
 
-When Obsidian monitor output is enabled, backtest reports are written under
-`E:\tools\OB\Obsidian\Trade\notes\monitor\backtest`.
+## Notes
+
+- Real-time scans only run during normal A-share trading hours unless `--ignore-trading-hours` is used.
+- If online data sources fail, the system may fall back to local cache depending on provider availability.
+- Backtest and replay depth for 15-minute data still depends on the local cache plus upstream data-source history limits.

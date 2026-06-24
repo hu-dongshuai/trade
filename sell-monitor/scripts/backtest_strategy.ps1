@@ -5,15 +5,19 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$EndDate,
     [string]$Output = "",
-    [string]$PythonExe = "C:\Users\admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+    [string]$PythonExe = ""
 )
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptDir
+. (Join-Path $scriptDir "_python.ps1")
+. (Join-Path $scriptDir "_config.ps1")
+$resolvedPythonExe = Resolve-SellMonitorPython -ProjectRoot $projectRoot -PreferredPythonExe $PythonExe
 
 Push-Location $projectRoot
 try {
+    $resolvedConfig = Set-SellMonitorConfigEnv -ProjectRoot $projectRoot
     $argsList = @("-m", "sell_monitor.app.backtest", "--start-date", $StartDate, "--end-date", $EndDate)
     if ($Symbols.Count -gt 0) {
         $normalizedSymbols = foreach ($item in $Symbols) {
@@ -33,7 +37,9 @@ try {
     if ($Output) {
         $argsList += @("--output", $Output)
     }
-    & $PythonExe @argsList
+    Write-Host "Using Python: $resolvedPythonExe"
+    Write-Host "Using config: $resolvedConfig"
+    & $resolvedPythonExe @argsList
 }
 finally {
     Pop-Location

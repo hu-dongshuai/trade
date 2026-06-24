@@ -16,6 +16,9 @@ LATEST_ZONES_START = "<!-- SELL_MONITOR_LATEST_ZONES_START -->"
 LATEST_ZONES_END = "<!-- SELL_MONITOR_LATEST_ZONES_END -->"
 MONITOR_TABLE_HEADER = "| 检测时间 | 股票代码 | 结论 | 动作 | 分数 | 价格 | 原因/提示 | 下一步 | 取消条件 |"
 MONITOR_TABLE_SEPARATOR = "| --- | --- | --- | --- | ---: | ---: | --- | --- | --- |"
+DAILY_TRIGGER_TITLE = "# 当日应卖出"
+DAILY_TRIGGER_TABLE_HEADER = "| 时间 | 股票代码 | 卖出动作 | 分数 | 价格 | 原因 | 建议 |"
+DAILY_TRIGGER_TABLE_SEPARATOR = "| --- | --- | --- | ---: | ---: | --- | --- |"
 
 
 class ObsidianMarkdownChannel:
@@ -129,6 +132,16 @@ def _format_run_row(
     )
 
 
+def _format_daily_trigger_row(decision: Decision, now: datetime) -> str:
+    now_text = now.strftime("%Y-%m-%d %H:%M:%S")
+    display_value = normalize_symbol_name(decision.symbol, decision.symbol_name) or decision.symbol
+    return (
+        f"| {_format_time_cell(now_text, True)} | {display_value} | {decision.action.value} | {decision.total_score} | "
+        f"{_format_price_cell(decision.current_price)} | {_table_cell(_join_reasons(decision.reasons))} | "
+        f"{_table_cell(decision.next_step)} |"
+    )
+
+
 def _format_time_cell(now_text: str, has_sell_signal: bool) -> str:
     if has_sell_signal:
         return f'<span style="color:red">{now_text}</span>'
@@ -155,26 +168,10 @@ def _write_daily_trigger_summary(monitor_dir: Path, decisions: list[Decision], n
     sell_decisions = [decision for decision in decisions if decision.action in SELL_SIGNAL_ACTIONS]
     if not sell_decisions:
         return
-    path = monitor_dir / "当日触发.md"
-    previous = path.read_text(encoding="utf-8") if path.exists() else "# 当日触发\n\n"
-    entry = _format_daily_trigger_entry(sell_decisions, now)
-    path.write_text(_prepend_entry(previous, entry), encoding="utf-8")
-
-
-def _format_daily_trigger_entry(decisions: list[Decision], now: datetime) -> str:
-    now_text = now.strftime("%Y-%m-%d %H:%M:%S")
-    lines = [
-        "| 时间 | 股票代码 | 卖出动作 | 分数 | 价格 | 原因 | 建议 |",
-        "| --- | --- | --- | ---: | ---: | --- | --- |",
-    ]
-    for decision in decisions:
-        display_value = normalize_symbol_name(decision.symbol, decision.symbol_name) or decision.symbol
-        lines.append(
-            f"| {_format_time_cell(now_text, True)} | {display_value} | {decision.action.value} | {decision.total_score} | {_format_price_cell(decision.current_price)} | "
-            f"{_table_cell(_join_reasons(decision.reasons))} | {_table_cell(decision.next_step)} |"
-        )
-    lines.append("")
-    return "\n".join(lines)
+    path = monitor_dir / "当日应卖出.md"
+    previous = path.read_text(encoding="utf-8") if path.exists() else f"{DAILY_TRIGGER_TITLE}\n\n"
+    rows = [_format_daily_trigger_row(decision, now) for decision in sell_decisions]
+    path.write_text(_prepend_daily_trigger_rows(previous, rows), encoding="utf-8")
 
 
 def _summarize_reasons(decision: Decision | None, notices: list[str]) -> str:
@@ -235,8 +232,15 @@ def _prepend_monitor_run(previous: str, row: str, symbol: str, chart_ref: str) -
     body = _remove_embedded_zone_tables(body)
     existing_rows = _extract_monitor_rows(body)
     zone_section = _format_latest_zone_section(symbol, chart_ref)
-    monitor_table = _format_monitor_table([row] + existing_rows)
+    monitor_table = _format_table(MONITOR_TABLE_HEADER, MONITOR_TABLE_SEPARATOR, [row] + existing_rows)
     return f"{title}\n\n{zone_section}{monitor_table}\n"
+
+
+def _prepend_daily_trigger_rows(previous: str, rows: list[str]) -> str:
+    title, body = _split_daily_trigger_title(previous)
+    existing_rows = _extract_table_rows(body, DAILY_TRIGGER_TABLE_HEADER, DAILY_TRIGGER_TABLE_SEPARATOR)
+    daily_table = _format_table(DAILY_TRIGGER_TABLE_HEADER, DAILY_TRIGGER_TABLE_SEPARATOR, rows + existing_rows)
+    return f"{title}\n\n{daily_table}\n"
 
 
 def _split_title(previous: str, symbol: str) -> tuple[str, str]:
@@ -244,6 +248,13 @@ def _split_title(previous: str, symbol: str) -> tuple[str, str]:
     if lines and lines[0].startswith("# "):
         return lines[0], "\n".join(lines[1:]).strip()
     return f"# {symbol} 监控记录", previous.strip()
+
+
+def _split_daily_trigger_title(previous: str) -> tuple[str, str]:
+    lines = previous.splitlines()
+    if lines and lines[0].startswith("# "):
+        return lines[0], "\n".join(lines[1:]).strip()
+    return DAILY_TRIGGER_TITLE, previous.strip()
 
 
 def _format_latest_zone_section(symbol: str, chart_ref: str) -> str:
@@ -279,21 +290,25 @@ def _remove_embedded_zone_tables(body: str) -> str:
 
 
 def _extract_monitor_rows(body: str) -> list[str]:
+    return _extract_table_rows(body, MONITOR_TABLE_HEADER, MONITOR_TABLE_SEPARATOR)
+
+
+def _extract_table_rows(body: str, header: str, separator: str) -> list[str]:
     rows: list[str] = []
     for raw_line in body.splitlines():
         line = raw_line.strip()
         if not line.startswith("|"):
             continue
-        if line == MONITOR_TABLE_HEADER or line == MONITOR_TABLE_SEPARATOR:
+        if line == header or line == separator:
             continue
-        if _looks_like_monitor_row(line):
+        if _looks_like_table_row(line):
             rows.append(line)
     return rows
 
 
-def _looks_like_monitor_row(line: str) -> bool:
+def _looks_like_table_row(line: str) -> bool:
     return bool(re.match(r"^\| (?:<span[^>]*>)?\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", line))
 
 
-def _format_monitor_table(rows: list[str]) -> str:
-    return "\n".join([MONITOR_TABLE_HEADER, MONITOR_TABLE_SEPARATOR, *rows, ""])
+def _format_table(header: str, separator: str, rows: list[str]) -> str:
+    return "\n".join([header, separator, *rows, ""])

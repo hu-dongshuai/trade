@@ -22,3 +22,8 @@ class ZoneLevel(StrEnum):
     C = "C"
     D = "D"
 
+
+class EntryAction(StrEnum):
+    ALLOW_ENTRY = "allow_entry"
+    WATCH_ENTRY = "watch_entry"
+    REJECT_ENTRY = "reject_entry"

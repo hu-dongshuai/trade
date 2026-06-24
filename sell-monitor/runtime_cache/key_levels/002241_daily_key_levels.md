@@ -1,20 +1,23 @@
 # 002241 日线关键价位
 
-- 更新时间: 2026-06-05 11:21:54
-- 对应最新日线: 2026-06-04 00:00:00
+- 更新时间: 2026-06-23 09:54:46
+- 对应最新日线: 2026-06-22 00:00:00
 - 日线趋势: down
 
 | 周期 | 等级 | 名称 | 区间下沿 | 区间上沿 | 净分 | 重要性 | 脆弱性 | 失效价 | 触达次数 | 标签 |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| mixed | A | daily_resistance_6+daily_fib_extension_1.272_155_194+weekly_resistance_1+daily_resistance_7 | 30.03 | 32.27 | 6 | 7 | 1 | 32.64 | 2 | daily_fibonacci, fib_ext_1.272, fresh_zone, higher_timeframe, merged_resistance, resistance, weekly_resistance, with_large_liquidity, with_liquidity, with_order_block, with_weekly_resistance |
-| 1d | B | daily_support_0 | 21.48 | 22.18 | 5 | 6 | 1 | 21.14 | 3 | support, fresh_zone, with_liquidity, with_order_block |
-| 1d | B | daily_support_1 | 23.73 | 24.43 | 6 | 8 | 4 | 23.38 | 7 | support, many_touches, with_liquidity, with_large_liquidity, with_order_block |
-| 1d | B | daily_resistance_2+daily_fib_retracement_0.382_133_167+daily_fib_retracement_0.5_133_167+daily_fib_retracement_0.618_133_167+daily_resistance_3+daily_fib_retracement_0.786_133_167 | 24.72 | 26.58 | 8 | 9 | 4 | 26.93 | 7 | daily_fibonacci, fib_0.382, fib_0.5, fib_0.618, fib_0.786, fresh_zone, many_touches, merged_resistance, resistance, with_fibonacci, with_large_liquidity, with_liquidity, with_order_block |
-| 1d | B | daily_support_3 | 25.34 | 26.03 | 6 | 7 | 1 | 24.99 | 3 | support, fresh_zone, with_liquidity, with_large_liquidity, with_order_block |
-| 1d | B | daily_support_4 | 27.01 | 27.71 | 7 | 8 | 1 | 26.66 | 4 | support, fresh_zone, with_liquidity, with_large_liquidity, with_order_block |
-| 1d | B | daily_resistance_5 | 28.49 | 29.19 | 5 | 7 | 2 | 29.54 | 3 | resistance, recently_tested, with_liquidity, with_large_liquidity, with_order_block |
-| 1d | B | daily_support_5 | 28.54 | 29.24 | 5 | 6 | 1 | 28.19 | 2 | support, fresh_zone, with_liquidity, with_large_liquidity, with_order_block |
-| 1d | B | daily_support_7 | 30.58 | 31.28 | 6 | 7 | 1 | 30.24 | 3 | support, fresh_zone, with_liquidity, with_large_liquidity, with_order_block |
-| 1d | C | daily_support_6 | 29.53 | 30.23 | 4 | 5 | 1 | 29.18 | 2 | support, fresh_zone, with_liquidity, with_large_liquidity |
-| 1d | C | daily_fib_extension_1.618_155_194+daily_resistance_8 | 33.26 | 33.98 | 4 | 4 | 0 | 34.33 | 2 | daily_fibonacci, fib_ext_1.618, fresh_zone, merged_resistance, resistance, with_fibonacci, with_order_block |
-| 1d | D | daily_resistance_10 | 36.23 | 36.92 | 2 | 2 | 0 | 37.27 | 2 | resistance, fresh_zone |
+| 1d | A | daily_fib_extension_1.272_149_194+daily_fib_retracement_0.382_183_193+daily_fib_extension_1.618_149_194+daily_resistance_2+daily_fib_retracement_0.5_183_193+daily_resistance_3+daily_fib_retracement_0.618_183_193+daily_resistance_4+daily_fib_retracement_0.786_183_193 | 24.07 | 27.71 | 10 | 11 | 3 | 27.71 | 6 | daily_fibonacci, fib_0.382, fib_0.5, fib_0.618, fib_0.786, fib_ext_1.272, fib_ext_1.618, fresh_zone, many_touches, merged_resistance, resistance, with_fibonacci, with_fresh_fvg, with_fvg, with_large_liquidity, with_liquidity, with_order_block |
+| 1d | A | daily_support_3 | 25.40 | 25.97 | 9 | 10 | 1 | 25.11 | 3 | support, fresh_zone, with_fvg, with_fresh_fvg, with_liquidity, with_order_block |
+| 1d | B | daily_support_0 | 21.65 | 22.22 | 7 | 8 | 1 | 21.36 | 4 | support, with_liquidity, with_large_liquidity, with_order_block |
+| 1d | B | daily_support_1 | 23.72 | 24.29 | 6 | 8 | 3 | 23.43 | 6 | support, fresh_zone, many_touches, with_liquidity, with_large_liquidity, with_order_block |
+| 1d | B | daily_support_2 | 24.37 | 24.94 | 5 | 6 | 1 | 24.08 | 2 | support, fresh_zone, with_liquidity, with_large_liquidity, with_order_block |
+| 1d | B | daily_support_5 | 27.24 | 27.81 | 6 | 7 | 1 | 26.95 | 3 | support, fresh_zone, with_liquidity, with_large_liquidity, with_order_block |
+| 1d | B | daily_resistance_5 | 28.55 | 29.13 | 6 | 7 | 1 | 29.42 | 3 | resistance, fresh_zone, with_liquidity, with_large_liquidity, with_order_block |
+| 1d | B | daily_support_6 | 28.60 | 29.18 | 5 | 6 | 1 | 28.31 | 2 | support, fresh_zone, with_liquidity, with_large_liquidity, with_order_block |
+| mixed | B | weekly_resistance_2+daily_resistance_8 | 31.39 | 32.25 | 4 | 4 | 0 | 32.60 | 2 | fresh_zone, higher_timeframe, merged_resistance, resistance, weekly_resistance, with_order_block, with_weekly_resistance |
+| 1d | C | daily_support_8 | 30.45 | 31.03 | 3 | 3 | 0 | 30.16 | 2 | support, fresh_zone, with_order_block |
+| 1d | C | daily_support_9 | 31.28 | 31.85 | 3 | 3 | 0 | 30.99 | 2 | support, fresh_zone, with_order_block |
+| 1d | C | daily_resistance_9 | 33.35 | 33.92 | 3 | 3 | 0 | 34.21 | 2 | resistance, fresh_zone, with_order_block |
+| 1d | D | daily_resistance_0 | 22.81 | 23.38 | 2 | 2 | 0 | 23.67 | 2 | resistance, fresh_zone |
+| 1d | D | daily_support_7 | 29.59 | 30.17 | 2 | 2 | 0 | 29.30 | 2 | support, fresh_zone |
+| 1d | D | daily_resistance_11 | 36.29 | 36.87 | 2 | 2 | 0 | 37.15 | 2 | resistance, fresh_zone |

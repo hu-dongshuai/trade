@@ -1,11 +1,13 @@
 param(
     [string]$Symbol = "002739",
-    [string]$PythonExe = "C:\Users\admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+    [string]$PythonExe = ""
 )
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptDir
+. (Join-Path $scriptDir "_python.ps1")
+$resolvedPythonExe = Resolve-SellMonitorPython -ProjectRoot $projectRoot -PreferredPythonExe $PythonExe
 
 function Write-Section {
     param([string]$Title)
@@ -97,7 +99,8 @@ for name, url, params in tests:
     $httpTemp = New-TemporaryFile
     try {
         Set-Content -LiteralPath $httpTemp.FullName -Value $httpCode -Encoding UTF8
-        & $PythonExe $httpTemp.FullName
+        Write-Host "Using Python: $resolvedPythonExe"
+        & $resolvedPythonExe $httpTemp.FullName
     }
     finally {
         Remove-Item -LiteralPath $httpTemp.FullName -ErrorAction SilentlyContinue
@@ -126,7 +129,7 @@ for name, func in tests:
     $akTemp = New-TemporaryFile
     try {
         Set-Content -LiteralPath $akTemp.FullName -Value $akCode -Encoding UTF8
-        & $PythonExe $akTemp.FullName
+        & $resolvedPythonExe $akTemp.FullName
     }
     finally {
         Remove-Item -LiteralPath $akTemp.FullName -ErrorAction SilentlyContinue

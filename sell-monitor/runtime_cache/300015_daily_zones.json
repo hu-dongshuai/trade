@@ -1,37 +1,38 @@
 {
-  "saved_at": "2026-06-05T11:23:17.626611",
+  "saved_at": "2026-06-23T09:56:25.950971",
   "symbol": "300015",
   "strategy_version": 4,
-  "latest_daily_ts": "2026-06-04T00:00:00",
+  "latest_daily_ts": "2026-06-22T00:00:00",
   "daily_trend": "down",
   "zones": [
     {
-      "name": "daily_resistance_1+daily_fib_retracement_0.382_173_193",
+      "name": "daily_resistance_2+daily_fib_retracement_0.5_162_191",
       "timeframe": "1d",
-      "low": 9.648869047619046,
-      "high": 9.89455857142857,
-      "score": 8,
+      "low": 9.667619047619047,
+      "high": 9.799047619047618,
+      "score": 9,
       "level": "A",
       "tags": [
         "daily_fibonacci",
-        "fib_0.382",
+        "fib_0.5",
         "fresh_zone",
         "merged_resistance",
         "resistance",
+        "with_fibonacci",
         "with_fresh_fvg",
         "with_fvg",
         "with_liquidity"
       ],
       "touches": 3,
-      "importance_score": 9,
+      "importance_score": 10,
       "fragility_score": 1,
-      "invalidation_price": 9.902261904761906
+      "invalidation_price": 9.864761904761904
     },
     {
-      "name": "daily_support_1",
+      "name": "daily_support_2",
       "timeframe": "1d",
-      "low": 9.29220238095238,
-      "high": 9.461130952380953,
+      "low": 9.310952380952381,
+      "high": 9.442380952380953,
       "score": 5,
       "level": "B",
       "tags": [
@@ -43,74 +44,35 @@
       "touches": 3,
       "importance_score": 6,
       "fragility_score": 1,
-      "invalidation_price": 9.207738095238094
+      "invalidation_price": 9.245238095238095
     },
     {
-      "name": "daily_support_3",
+      "name": "daily_resistance_3+daily_fib_retracement_0.786_162_191",
       "timeframe": "1d",
-      "low": 10.010535714285712,
-      "high": 10.179464285714285,
-      "score": 6,
-      "level": "B",
-      "tags": [
-        "support",
-        "fresh_zone",
-        "with_fvg",
-        "with_fresh_fvg"
-      ],
-      "touches": 2,
-      "importance_score": 6,
-      "fragility_score": 0,
-      "invalidation_price": 9.926071428571426
-    },
-    {
-      "name": "daily_fib_retracement_0.5_173_193+daily_resistance_2+daily_fib_retracement_0.618_173_193",
-      "timeframe": "1d",
-      "low": 10.069321428571428,
-      "high": 10.479464285714286,
-      "score": 8,
-      "level": "B",
-      "tags": [
-        "daily_fibonacci",
-        "fib_0.5",
-        "fib_0.618",
-        "fresh_zone",
-        "merged_resistance",
-        "resistance",
-        "with_fibonacci",
-        "with_fresh_fvg",
-        "with_fvg",
-        "with_order_block"
-      ],
-      "touches": 2,
-      "importance_score": 8,
-      "fragility_score": 0,
-      "invalidation_price": 10.563928571428573
-    },
-    {
-      "name": "daily_support_4",
-      "timeframe": "1d",
-      "low": 10.285535714285714,
-      "high": 10.454464285714288,
+      "low": 10.329285714285714,
+      "high": 10.657468571428572,
       "score": 7,
       "level": "B",
       "tags": [
-        "support",
+        "daily_fibonacci",
+        "fib_0.786",
         "fresh_zone",
-        "with_fvg",
+        "merged_resistance",
+        "resistance",
         "with_fresh_fvg",
+        "with_fvg",
         "with_order_block"
       ],
       "touches": 2,
       "importance_score": 7,
       "fragility_score": 0,
-      "invalidation_price": 10.201071428571428
+      "invalidation_price": 10.657468571428572
     },
     {
-      "name": "daily_support_6",
+      "name": "daily_support_8",
       "timeframe": "1d",
-      "low": 10.764630774285713,
-      "high": 10.933559345714286,
+      "low": 10.783380774285714,
+      "high": 10.914809345714286,
       "score": 7,
       "level": "B",
       "tags": [
@@ -123,31 +85,13 @@
       "touches": 4,
       "importance_score": 8,
       "fragility_score": 1,
-      "invalidation_price": 10.680166488571427
+      "invalidation_price": 10.717666488571428
     },
     {
-      "name": "daily_support_7",
+      "name": "daily_resistance_7+daily_fib_extension_1.272_143_172",
       "timeframe": "1d",
-      "low": 11.06114390095238,
-      "high": 11.230072472380954,
-      "score": 5,
-      "level": "B",
-      "tags": [
-        "support",
-        "fresh_zone",
-        "with_liquidity",
-        "with_order_block"
-      ],
-      "touches": 3,
-      "importance_score": 6,
-      "fragility_score": 1,
-      "invalidation_price": 10.976679615238094
-    },
-    {
-      "name": "daily_resistance_5+daily_fib_extension_1.272_154_183",
-      "timeframe": "1d",
-      "low": 11.32066939142857,
-      "high": 11.494918571428572,
+      "low": 11.33941939142857,
+      "high": 11.483668571428572,
       "score": 6,
       "level": "B",
       "tags": [
@@ -164,71 +108,14 @@
       "touches": 7,
       "importance_score": 8,
       "fragility_score": 4,
-      "invalidation_price": 11.57406224857143
+      "invalidation_price": 11.536562248571428
     },
     {
-      "name": "daily_support_8",
+      "name": "daily_support_11",
       "timeframe": "1d",
-      "low": 11.915063982285714,
-      "high": 12.083992553714287,
-      "score": 6,
-      "level": "B",
-      "tags": [
-        "support",
-        "fresh_zone",
-        "many_touches",
-        "with_liquidity",
-        "with_large_liquidity",
-        "with_order_block"
-      ],
-      "touches": 5,
-      "importance_score": 8,
-      "fragility_score": 2,
-      "invalidation_price": 11.830599696571428
-    },
-    {
-      "name": "daily_resistance_8",
-      "timeframe": "1d",
-      "low": 12.270620274285713,
-      "high": 12.439548845714286,
-      "score": 5,
-      "level": "B",
-      "tags": [
-        "resistance",
-        "fresh_zone",
-        "many_touches",
-        "with_liquidity",
-        "with_order_block"
-      ],
-      "touches": 5,
-      "importance_score": 7,
-      "fragility_score": 2,
-      "invalidation_price": 12.524013131428573
-    },
-    {
-      "name": "daily_support_9",
-      "timeframe": "1d",
-      "low": 12.416285794285713,
-      "high": 12.585214365714286,
-      "score": 5,
-      "level": "B",
-      "tags": [
-        "support",
-        "fresh_zone",
-        "with_liquidity",
-        "with_large_liquidity"
-      ],
-      "touches": 3,
-      "importance_score": 6,
-      "fragility_score": 1,
-      "invalidation_price": 12.331821508571426
-    },
-    {
-      "name": "daily_support_10",
-      "timeframe": "1d",
-      "low": 12.700995674285714,
-      "high": 12.869924245714287,
-      "score": 6,
+      "low": 11.909481219285714,
+      "high": 12.040909790714286,
+      "score": 7,
       "level": "B",
       "tags": [
         "support",
@@ -236,50 +123,115 @@
         "with_liquidity",
         "with_large_liquidity",
         "with_order_block"
-      ],
-      "touches": 3,
-      "importance_score": 7,
-      "fragility_score": 1,
-      "invalidation_price": 12.616531388571428
-    },
-    {
-      "name": "daily_resistance_10",
-      "timeframe": "1d",
-      "low": 12.995637294285714,
-      "high": 13.164565865714287,
-      "score": 6,
-      "level": "B",
-      "tags": [
-        "resistance",
-        "fresh_zone",
-        "with_liquidity",
-        "with_large_liquidity"
       ],
       "touches": 4,
-      "importance_score": 7,
+      "importance_score": 8,
       "fragility_score": 1,
-      "invalidation_price": 13.249030151428574
+      "invalidation_price": 11.843766933571429
     },
     {
-      "name": "daily_fib_retracement_0.786_173_193+daily_resistance_4",
+      "name": "daily_resistance_10+daily_resistance_11",
       "timeframe": "1d",
-      "low": 10.738561428571428,
-      "high": 11.136272815714285,
-      "score": 4,
-      "level": "C",
+      "low": 12.180121134285715,
+      "high": 12.493631605714286,
+      "score": 5,
+      "level": "B",
       "tags": [
-        "daily_fibonacci",
-        "fib_0.786",
         "fresh_zone",
         "merged_resistance",
         "resistance",
         "with_liquidity",
         "with_order_block"
       ],
+      "touches": 3,
+      "importance_score": 6,
+      "fragility_score": 1,
+      "invalidation_price": 12.559345891428572
+    },
+    {
+      "name": "daily_fib_retracement_0.382_162_191",
+      "timeframe": "1d",
+      "low": 9.310051428571429,
+      "high": 9.388908571428571,
+      "score": 3,
+      "level": "C",
+      "tags": [
+        "resistance",
+        "daily_fibonacci",
+        "fib_0.382"
+      ],
+      "touches": 0,
+      "importance_score": 3,
+      "fragility_score": 0,
+      "invalidation_price": 9.388908571428571
+    },
+    {
+      "name": "daily_fib_retracement_0.618_162_191",
+      "timeframe": "1d",
+      "low": 10.051091428571429,
+      "high": 10.12994857142857,
+      "score": 3,
+      "level": "C",
+      "tags": [
+        "resistance",
+        "daily_fibonacci",
+        "fib_0.618"
+      ],
+      "touches": 0,
+      "importance_score": 3,
+      "fragility_score": 0,
+      "invalidation_price": 10.12994857142857
+    },
+    {
+      "name": "daily_support_9",
+      "timeframe": "1d",
+      "low": 11.036299024285714,
+      "high": 11.167727595714286,
+      "score": 4,
+      "level": "C",
+      "tags": [
+        "support",
+        "fresh_zone",
+        "with_liquidity",
+        "with_order_block"
+      ],
       "touches": 2,
       "importance_score": 5,
       "fragility_score": 1,
-      "invalidation_price": 11.220737101428572
+      "invalidation_price": 10.970584738571429
+    },
+    {
+      "name": "daily_support_13",
+      "timeframe": "1d",
+      "low": 12.388687674285714,
+      "high": 12.520116245714286,
+      "score": 3,
+      "level": "C",
+      "tags": [
+        "support",
+        "fresh_zone",
+        "with_liquidity"
+      ],
+      "touches": 2,
+      "importance_score": 4,
+      "fragility_score": 1,
+      "invalidation_price": 12.322973388571429
+    },
+    {
+      "name": "daily_support_4",
+      "timeframe": "1d",
+      "low": 10.029285714285713,
+      "high": 10.160714285714285,
+      "score": 2,
+      "level": "D",
+      "tags": [
+        "support",
+        "fresh_zone"
+      ],
+      "touches": 2,
+      "importance_score": 2,
+      "fragility_score": 0,
+      "invalidation_price": 9.963571428571427
     }
   ]
 }

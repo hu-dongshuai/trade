@@ -1,0 +1,2 @@
+[console_scripts]
+sell-monitor = sell_monitor.app.main:main

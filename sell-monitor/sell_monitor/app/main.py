@@ -11,9 +11,12 @@ from sell_monitor.monitor.sell_monitor_service import SellMonitorService
 from sell_monitor.notifier.alert_dispatcher import ConsoleAlertDispatcher, ConsoleChannel
 from sell_monitor.notifier.channels.email import EmailChannel
 from sell_monitor.notifier.channels.obsidian import ObsidianMonitorRunRecorder
+from sell_monitor.notifier.channels.telegram import TelegramChannel
+from sell_monitor.notifier.symbol_display import display_symbol
 from sell_monitor.storage.position_store import JsonPositionStore
 from sell_monitor.storage.user_rule_store import JsonUserRuleStore
-from sell_monitor.storage.watchlist_store import JsonWatchlistStore
+from sell_monitor.storage.watchlist_factory import build_watchlist_store
+from sell_monitor.domain.enums import Action
 from sell_monitor.trading_time import describe_a_share_trading_hours, is_a_share_trading_time, now_china
 
 
@@ -35,6 +38,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     config = load_default_config(args.base_dir)
+    print(f"Using provider: {config.provider}")
     current_time = now_china()
     if not args.ignore_trading_hours and not is_a_share_trading_time(current_time):
         print(
@@ -43,7 +47,7 @@ def main() -> int:
         )
         return 0
 
-    watchlist_store = JsonWatchlistStore(config.watchlist_path)
+    watchlist_store = build_watchlist_store(config, mode="sell")
     position_store = JsonPositionStore(config.positions_path)
     user_rule_store = JsonUserRuleStore(config.user_rules_path)
     provider = build_market_data_provider(config)
@@ -51,6 +55,7 @@ def main() -> int:
     if config.email:
         channels.append(EmailChannel(config.email))
     channels.append(ConsoleChannel())
+    telegram_channel = TelegramChannel(config.telegram) if config.telegram else None
     obsidian_recorder = ObsidianMonitorRunRecorder(config.obsidian_monitor) if config.obsidian_monitor else None
     notifier = ConsoleAlertDispatcher(
         channels=channels,
@@ -109,10 +114,34 @@ def main() -> int:
         )
     for decision in result.decisions:
         notifier.dispatch(decision)
+        if telegram_channel and _should_send_sell_telegram(decision):
+            try:
+                telegram_channel.send(
+                    subject=f"{config.telegram.subject_prefix} 卖出提醒 {display_symbol(decision.symbol, decision.symbol_name)} score={decision.total_score}",
+                    message=_format_sell_telegram_message(decision),
+                )
+            except Exception as exc:
+                print(f"[Telegram] {display_symbol(decision.symbol, decision.symbol_name)} 发送失败: {exc}")
     close = getattr(provider, "close", None)
     if callable(close):
         close()
     return 0
+
+
+def _should_send_sell_telegram(decision) -> bool:
+    return decision.action in {Action.REDUCE, Action.STOP_LOSS, Action.EXIT_ALL} and decision.total_score >= 8
+
+
+def _format_sell_telegram_message(decision) -> str:
+    reason_lines = "\n".join(f"- {reason}" for reason in decision.reasons[:6]) or "- 无"
+    return (
+        f"股票: {display_symbol(decision.symbol, decision.symbol_name)}\n"
+        f"类型: 卖出\n"
+        f"动作: {decision.action.value}\n"
+        f"分数: {decision.total_score}\n"
+        f"理由:\n{reason_lines}\n"
+        f"下一步: {decision.next_step}"
+    )
 
 
 if __name__ == "__main__":

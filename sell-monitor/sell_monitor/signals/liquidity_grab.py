@@ -20,5 +20,7 @@ def detect_resistance_liquidity_grab(bars: list[Bar], zone: PriceZone) -> Signal
                 3,
                 True,
                 "压力位上方扫流动性后回落（liquidity grab）",
+                triggered_at=bar.ts,
+                trigger_price=bar.close,
             )
     return None

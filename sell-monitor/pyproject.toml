@@ -12,3 +12,6 @@ dependencies = ["akshare>=1.18.40", "baostock>=0.9.1"]
 
 [project.scripts]
 sell-monitor = "sell_monitor.app.main:main"
+
+[tool.setuptools]
+packages = ["sell_monitor"]

@@ -3,23 +3,24 @@ param(
     [switch]$Loop,
     [switch]$IgnoreTradingHours,
     [int]$IntervalSeconds = 3600,
-    [string]$PythonExe = "C:\Users\admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+    [string]$PythonExe = ""
 )
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptDir
+. (Join-Path $scriptDir "_python.ps1")
+. (Join-Path $scriptDir "_config.ps1")
+$resolvedPythonExe = Resolve-SellMonitorPython -ProjectRoot $projectRoot -PreferredPythonExe $PythonExe
 
 Push-Location $projectRoot
 try {
-    if (-not (Test-Path ".env")) {
-        Copy-Item ".env.example" ".env"
-        Write-Host "Created .env from .env.example. Please fill in SMTP values before production use."
-    }
+    $resolvedConfig = Set-SellMonitorConfigEnv -ProjectRoot $projectRoot
 
     do {
         $runAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        Write-Host "[$runAt] Running sell monitor..."
+        Write-Host "[$runAt] Running sell monitor with Python: $resolvedPythonExe"
+        Write-Host "Using config: $resolvedConfig"
         $argsList = @("-m", "sell_monitor.app.main")
         if ($Symbol) {
             $argsList += @("--symbol", $Symbol)
@@ -27,7 +28,7 @@ try {
         if ($IgnoreTradingHours) {
             $argsList += "--ignore-trading-hours"
         }
-        & $PythonExe @argsList
+        & $resolvedPythonExe @argsList
 
         if ($Loop) {
             Write-Host "Next run after $IntervalSeconds seconds."

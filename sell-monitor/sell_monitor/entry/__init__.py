@@ -1,0 +1,1 @@
+"""Entry detection workflow."""

@@ -77,7 +77,7 @@ class SupportProtectionTest(unittest.TestCase):
         decision = Decision(
             "TEST",
             Action.EXIT_ALL,
-            999,
+            5,
             Priority.IMMEDIATE,
             ["出现第三根危险上影线", "放量跌破15分钟MA20"],
             "清仓",
@@ -140,7 +140,7 @@ class SupportProtectionTest(unittest.TestCase):
         decision = Decision(
             "TEST",
             Action.EXIT_ALL,
-            999,
+            0,
             Priority.IMMEDIATE,
             ["用户设置了硬性清仓规则：计划失效"],
             "清仓",

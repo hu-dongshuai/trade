@@ -12,6 +12,7 @@ def build_decision(
     current_price: float | None = None,
 ) -> Decision:
     reasons = [signal.reason for signal in signals if signal.triggered]
+
     if total_score > 5:
         return Decision(
             symbol=symbol,
@@ -20,7 +21,7 @@ def build_decision(
             priority=Priority.IMMEDIATE,
             reasons=reasons,
             next_step="清仓卖出",
-            cancel_condition="需要后续重新站回关键价位，并重新建立做多结构",
+            cancel_condition="需要后续重新站回关键价位，并重建做多结构",
             symbol_name=symbol_name,
             current_price=current_price,
         )

@@ -86,6 +86,16 @@ class SellMonitorServiceTest(unittest.TestCase):
         self.assertEqual([], result.notices)
         self.assertEqual(1, len(result.decisions))
 
+    def test_static_provider_missing_symbol_raises_friendly_market_data_error(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        provider = StaticMarketDataProvider(project_root / "examples" / "market_data.json")
+
+        with self.assertRaises(MarketDataError) as context:
+            provider.get_daily_bars("002241")
+
+        self.assertIn("当前使用的是静态数据源 static", str(context.exception))
+        self.assertIn("切换回 akshare/baostock", str(context.exception))
+
     def test_auto_adds_symbol_to_watchlist_when_filtered(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         provider = StaticMarketDataProvider(project_root / "examples" / "market_data.json")

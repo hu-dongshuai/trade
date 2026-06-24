@@ -20,7 +20,7 @@ from sell_monitor.scoring.hold_protection import apply_hold_protection_reference
 from sell_monitor.scoring.score_engine import compute_score
 from sell_monitor.storage.position_store import JsonPositionStore
 from sell_monitor.storage.user_rule_store import JsonUserRuleStore
-from sell_monitor.storage.watchlist_store import JsonWatchlistStore
+from sell_monitor.storage.watchlist_factory import build_watchlist_store
 
 
 @dataclass(frozen=True)
@@ -61,10 +61,11 @@ def main() -> int:
 
     args = build_parser().parse_args()
     config = load_default_config(args.base_dir)
+    print(f"Using provider: {config.provider}")
     provider = build_market_data_provider(config)
     start_dt = datetime.strptime(args.start_date, "%Y-%m-%d")
     end_dt = datetime.strptime(args.end_date, "%Y-%m-%d")
-    symbols = _parse_symbols(args.symbols) or JsonWatchlistStore(config.watchlist_path).load()
+    symbols = _parse_symbols(args.symbols) or build_watchlist_store(config, mode="sell").load()
     positions = JsonPositionStore(config.positions_path).load_all()
     rules = JsonUserRuleStore(config.user_rules_path).load_all()
 

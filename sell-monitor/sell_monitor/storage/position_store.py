@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from sell_monitor.domain.models import Position
+from sell_monitor.storage.markdown_config import read_json_payload, write_json_payload
 
 
 class JsonPositionStore:
@@ -13,7 +13,7 @@ class JsonPositionStore:
     def load_all(self) -> dict[str, Position]:
         if not self.path.exists():
             return {}
-        data = json.loads(self.path.read_text(encoding="utf-8-sig"))
+        data = read_json_payload(self.path)
         result: dict[str, Position] = {}
         for item in data["positions"]:
             result[item["symbol"]] = Position(
@@ -37,8 +37,5 @@ class JsonPositionStore:
                 for item in positions.values()
             ]
         }
-        self.path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_json_payload(self.path, payload, title="Positions")
         return created

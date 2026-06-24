@@ -25,7 +25,17 @@ def run_intraday_monitor(daily_context: DailyContext, daily_bars, m15_bars) -> l
     support_only_zone = "support" in active_zone.tags and "resistance" not in active_zone.tags
 
     if not support_only_zone and has_bearish_rsi_divergence(m15_bars):
-        signals.append(Signal("rsi_bearish_divergence", 1, True, "RSI顶背离且位于关键价位附近"))
+        last_bar = m15_bars[-1]
+        signals.append(
+            Signal(
+                "rsi_bearish_divergence",
+                1,
+                True,
+                "RSI 顶背离且位于关键价位附近",
+                triggered_at=last_bar.ts,
+                trigger_price=last_bar.close,
+            )
+        )
 
     if not support_only_zone:
         signals.extend(detect_dangerous_upper_wick_signals(m15_bars, active_zone))
@@ -59,20 +69,44 @@ def run_intraday_monitor(daily_context: DailyContext, daily_bars, m15_bars) -> l
     signals.extend(detect_volume_price_anomaly(m15_bars, daily_bars))
 
     if daily_context.market_state == "down":
-        signals.append(Signal("market_weakness", 1, True, "大盘同步转弱"))
+        last_bar = m15_bars[-1]
+        signals.append(
+            Signal(
+                "market_weakness",
+                1,
+                True,
+                "大盘同步转弱",
+                triggered_at=last_bar.ts,
+                trigger_price=last_bar.close,
+            )
+        )
+
     if not support_only_zone and daily_context.active_zone.level.value == "A":
-        signals.append(Signal("a_level_zone", 1, True, "当前位于A级日线关键价位附近"))
+        last_bar = m15_bars[-1]
+        signals.append(
+            Signal(
+                "a_level_zone",
+                1,
+                True,
+                "当前位于 A 级日线关键价位附近",
+                triggered_at=last_bar.ts,
+                trigger_price=last_bar.close,
+            )
+        )
+
     return signals
 
 
 def detect_m15_ma20_high_volume_break(m15_bars: list[Bar]) -> Signal | None:
     if len(m15_bars) < 22:
         return None
+
     prev = m15_bars[-2]
     last = m15_bars[-1]
     prev_ma20 = closing_ma(m15_bars[-22:-2], 20)
     last_ma20 = closing_ma(m15_bars[-21:-1], 20)
     avg_vol_10 = average_volume(m15_bars[-11:-1], 10)
+
     if (
         prev_ma20 > 0
         and last_ma20 > 0
@@ -81,5 +115,12 @@ def detect_m15_ma20_high_volume_break(m15_bars: list[Bar]) -> Signal | None:
         and avg_vol_10 > 0
         and last.volume >= avg_vol_10 * 1.5
     ):
-        return Signal("m15_ma20_high_volume_break", 2, True, "连续两根15分钟K线收在MA20下方，且最后一根放量")
+        return Signal(
+            "m15_ma20_high_volume_break",
+            2,
+            True,
+            f"{last.ts:%H:%M} 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方",
+            triggered_at=last.ts,
+            trigger_price=last.close,
+        )
     return None

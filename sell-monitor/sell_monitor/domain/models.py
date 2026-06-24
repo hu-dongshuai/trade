@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sell_monitor.domain.enums import Action, Priority, ZoneLevel
+from sell_monitor.domain.enums import Action, EntryAction, Priority, ZoneLevel
 
 
 @dataclass(frozen=True)
@@ -137,6 +137,8 @@ class Signal:
     score: int
     triggered: bool
     reason: str
+    triggered_at: datetime | None = None
+    trigger_price: float | None = None
 
 
 @dataclass(frozen=True)
@@ -167,8 +169,34 @@ class Decision:
 
 
 @dataclass(frozen=True)
+class EntryDecision:
+    symbol: str
+    action: EntryAction
+    allowed: bool
+    entry_score: int
+    entry_model: str
+    planned_entry_price: float | None
+    stop_loss_price: float | None
+    first_take_profit_price: float | None
+    risk_reward_ratio: float | None
+    reasons: list[str]
+    blocking_reasons: list[str]
+    next_step: str
+    symbol_name: str | None = None
+    current_price: float | None = None
+
+
+@dataclass(frozen=True)
 class MonitorRunResult:
     decisions: list[Decision]
+    notices: list[str]
+    zone_snapshots: dict[str, list[PriceZone]] = field(default_factory=dict)
+    daily_bar_snapshots: dict[str, list[Bar]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class EntryScanRunResult:
+    decisions: list[EntryDecision]
     notices: list[str]
     zone_snapshots: dict[str, list[PriceZone]] = field(default_factory=dict)
     daily_bar_snapshots: dict[str, list[Bar]] = field(default_factory=dict)

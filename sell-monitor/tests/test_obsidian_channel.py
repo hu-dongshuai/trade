@@ -32,7 +32,7 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
             channel = ObsidianMarkdownChannel(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
 
             channel.send("[SellMonitor] 002241 hold score=0", "[002241] first result")
-            channel.send("[SellMonitor] 002241 exit_all score=999", "[002241] latest result")
+            channel.send("[SellMonitor] 002241 exit_all score=6", "[002241] latest result")
 
             content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
             self.assertTrue(content.startswith("# 002241 监控记录"))
@@ -149,6 +149,40 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
             self.assertNotIn("## 2026-", content)
             self.assertNotIn("股票名称", content)
             self.assertNotIn("持有保护", content)
+
+    def test_daily_trigger_summary_does_not_repeat_header(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
+            first = Decision(
+                symbol="002241",
+                symbol_name="歌尔股份",
+                action=Action.EXIT_ALL,
+                total_score=6,
+                priority=Priority.IMMEDIATE,
+                reasons=["第一次信号"],
+                next_step="清仓",
+                cancel_condition="信号消失",
+                current_price=24.94,
+            )
+            second = Decision(
+                symbol="002241",
+                symbol_name="歌尔股份",
+                action=Action.EXIT_ALL,
+                total_score=6,
+                priority=Priority.IMMEDIATE,
+                reasons=["第二次信号"],
+                next_step="清仓",
+                cancel_condition="信号消失",
+                current_price=24.95,
+            )
+
+            recorder.write_run(symbols=["002241"], decisions=[first], notices=[], now=datetime(2026, 6, 5, 9, 30, 0))
+            recorder.write_run(symbols=["002241"], decisions=[second], notices=[], now=datetime(2026, 6, 5, 10, 30, 0))
+
+            content = (Path(tmp) / "当日触发.md").read_text(encoding="utf-8")
+            self.assertEqual(1, content.count("| 时间 | 股票代码 | 卖出动作 | 分数 | 价格 | 原因 | 建议 |"))
+            self.assertEqual(1, content.count("| --- | --- | --- | ---: | ---: | --- | --- |"))
+            self.assertLess(content.index("10:30:00"), content.index("09:30:00"))
 
     def test_zone_chart_stays_before_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

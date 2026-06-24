@@ -4,6 +4,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from sell_monitor.storage.markdown_config import read_json_payload, write_json_payload
+
 
 @dataclass(frozen=True)
 class WatchlistItem:
@@ -19,7 +21,7 @@ class JsonWatchlistStore:
         return [item.symbol for item in self.load_items()]
 
     def load_items(self) -> list[WatchlistItem]:
-        data = json.loads(self.path.read_text(encoding="utf-8-sig"))
+        data = read_json_payload(self.path)
         items: list[WatchlistItem] = []
         for raw in data["symbols"]:
             if isinstance(raw, str):
@@ -41,9 +43,10 @@ class JsonWatchlistStore:
         if any(item.symbol == symbol for item in items):
             return False
         items.append(WatchlistItem(symbol=symbol))
-        self.path.write_text(
-            json.dumps({"symbols": _serialize_items(items)}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        write_json_payload(
+            self.path,
+            {"symbols": _serialize_items(items)},
+            title="Watchlist",
         )
         return True
 

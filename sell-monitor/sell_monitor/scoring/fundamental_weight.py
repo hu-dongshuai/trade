@@ -96,7 +96,7 @@ def assess_fundamentals(symbol: str, snapshot: FundamentalSnapshot | None) -> Fu
 def apply_fundamental_weight(decision: Decision, assessment: FundamentalAssessment) -> Decision:
     if assessment.score_adjustment == 0:
         return decision
-    if decision.action == Action.STOP_LOSS or decision.total_score >= 900:
+    if decision.action == Action.STOP_LOSS or _is_manual_hard_exit(decision):
         return decision
 
     adjusted_score = max(0, decision.total_score + assessment.score_adjustment)
@@ -147,6 +147,10 @@ def _decision_terms(
             "跌破日线 A/B 级支撑、15 分钟/60 分钟破位，或基本面转弱",
         )
     return Action.HOLD, Priority.NORMAL, fallback_next, fallback_cancel
+
+
+def _is_manual_hard_exit(decision: Decision) -> bool:
+    return any("硬性清仓规则" in reason for reason in decision.reasons)
 
 
 def _growth_ok(latest: float | None, previous: float | None, threshold: float) -> bool:

@@ -1,0 +1,7 @@
+# User Rules
+
+```json
+{
+  "rules": []
+}
+```

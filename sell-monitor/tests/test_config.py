@@ -69,6 +69,8 @@ class ConfigTest(unittest.TestCase):
             old_env_file = os.environ.get("SELL_MONITOR_ENV_FILE")
             old_monitor_dir = os.environ.pop("SELL_MONITOR_OBSIDIAN_MONITOR_DIR", None)
             old_enabled = os.environ.pop("SELL_MONITOR_OBSIDIAN_MONITOR_ENABLED", None)
+            explicit_env = root / ".env"
+            os.environ["SELL_MONITOR_ENV_FILE"] = str(explicit_env)
             try:
                 config = load_default_config(root)
                 self.assertIsNotNone(config.obsidian_monitor)
@@ -84,3 +86,90 @@ class ConfigTest(unittest.TestCase):
                     os.environ["SELL_MONITOR_OBSIDIAN_MONITOR_ENABLED"] = old_enabled
                 else:
                     os.environ.pop("SELL_MONITOR_OBSIDIAN_MONITOR_ENABLED", None)
+
+    def test_loads_telegram_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "examples").mkdir()
+            env_path = root / ".env"
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "SELL_MONITOR_TELEGRAM_BOT_TOKEN=123456:abc",
+                        "SELL_MONITOR_TELEGRAM_CHAT_ID=987654321",
+                        "SELL_MONITOR_TELEGRAM_SUBJECT_PREFIX=[TG]",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            keys = [
+                "SELL_MONITOR_ENV_FILE",
+                "SELL_MONITOR_TELEGRAM_BOT_TOKEN",
+                "SELL_MONITOR_TELEGRAM_CHAT_ID",
+                "SELL_MONITOR_TELEGRAM_SUBJECT_PREFIX",
+            ]
+            previous = {key: os.environ.pop(key, None) for key in keys}
+            try:
+                os.environ["SELL_MONITOR_ENV_FILE"] = str(env_path)
+                config = load_default_config(root)
+                self.assertIsNotNone(config.telegram)
+                assert config.telegram is not None
+                self.assertEqual("123456:abc", config.telegram.bot_token)
+                self.assertEqual("987654321", config.telegram.chat_id)
+                self.assertEqual("[TG]", config.telegram.subject_prefix)
+            finally:
+                for key, value in previous.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
+    def test_loads_markdown_env_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_dir = root / "config"
+            config_dir.mkdir(parents=True)
+            (root / "examples").mkdir()
+            env_md = config_dir / "sell-monitor-config.md"
+            env_md.write_text(
+                "# Config\n\n```dotenv\nSELL_MONITOR_PROVIDER=static\nSELL_MONITOR_SELL_WATCHLIST_PATH="
+                + str(root / "config" / "sell-watchlist.md")
+                + "\nSELL_MONITOR_ENTRY_WATCHLIST_PATH="
+                + str(root / "config" / "entry-watchlist.md")
+                + "\n```\n",
+                encoding="utf-8",
+            )
+            old_env_file = os.environ.get("SELL_MONITOR_ENV_FILE")
+            os.environ["SELL_MONITOR_ENV_FILE"] = str(env_md)
+            old_provider = os.environ.pop("SELL_MONITOR_PROVIDER", None)
+            old_watchlist = os.environ.pop("SELL_MONITOR_WATCHLIST_PATH", None)
+            old_sell_watchlist = os.environ.pop("SELL_MONITOR_SELL_WATCHLIST_PATH", None)
+            old_entry_watchlist = os.environ.pop("SELL_MONITOR_ENTRY_WATCHLIST_PATH", None)
+            try:
+                config = load_default_config(root)
+                self.assertEqual("static", config.provider)
+                self.assertEqual(root / "config" / "sell-watchlist.md", config.sell_watchlist_path)
+                self.assertEqual(root / "config" / "entry-watchlist.md", config.entry_watchlist_path)
+                self.assertEqual(root / "config" / "sell-watchlist.md", config.watchlist_path)
+            finally:
+                if old_env_file is None:
+                    os.environ.pop("SELL_MONITOR_ENV_FILE", None)
+                else:
+                    os.environ["SELL_MONITOR_ENV_FILE"] = old_env_file
+                if old_provider is not None:
+                    os.environ["SELL_MONITOR_PROVIDER"] = old_provider
+                else:
+                    os.environ.pop("SELL_MONITOR_PROVIDER", None)
+                if old_watchlist is not None:
+                    os.environ["SELL_MONITOR_WATCHLIST_PATH"] = old_watchlist
+                else:
+                    os.environ.pop("SELL_MONITOR_WATCHLIST_PATH", None)
+                if old_sell_watchlist is not None:
+                    os.environ["SELL_MONITOR_SELL_WATCHLIST_PATH"] = old_sell_watchlist
+                else:
+                    os.environ.pop("SELL_MONITOR_SELL_WATCHLIST_PATH", None)
+                if old_entry_watchlist is not None:
+                    os.environ["SELL_MONITOR_ENTRY_WATCHLIST_PATH"] = old_entry_watchlist
+                else:
+                    os.environ.pop("SELL_MONITOR_ENTRY_WATCHLIST_PATH", None)

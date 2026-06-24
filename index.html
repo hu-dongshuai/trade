@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reading Notes</title>
+  <style>
+    :root {
+      --bg: #f3f5f7;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --line: #d8dee6;
+      --line-strong: #c2cad4;
+      --text: #15202b;
+      --muted: #5c6773;
+      --accent: #3568b8;
+      --accent-soft: #e8f0ff;
+      --success: #2e7d61;
+      --shadow: 0 14px 28px rgba(19, 31, 52, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    body {
+      min-height: 100vh;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+      color: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    }
+
+    button:hover {
+      border-color: var(--line-strong);
+      background: #f9fbfd;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 10px 12px;
+      border-radius: 6px;
+      resize: vertical;
+    }
+
+    textarea {
+      min-height: 120px;
+      line-height: 1.7;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .sidebar-header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .toolbar button,
+    .book-add button,
+    .actions button,
+    .item-actions button,
+    .section-tools button {
+      border-radius: 6px;
+      padding: 9px 12px;
+    }
+
+    .book-add {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .book-list {
+      display: grid;
+      gap: 8px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .book-card {
+      width: 100%;
+      text-align: left;
+      padding: 12px;
+      border-radius: 8px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .book-card.active {
+      border-color: #aac1ec;
+      background: var(--accent-soft);
+    }
+
+    .book-title {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .book-subtitle,
+    .book-progress {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .topbar {
+      padding: 18px 24px;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    .topbar-title {
+      display: grid;
+      gap: 4px;
+    }
+
+    .topbar-title h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .action-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .action-primary:hover {
+      background: #2f5da5;
+      border-color: #2f5da5;
+    }
+
+    .content {
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+      gap: 18px;
+    }
+
+    .hero h3,
+    .panel h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .doc-summary {
+      margin: 0;
+      line-height: 1.9;
+      white-space: pre-wrap;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .info-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      padding: 14px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .info-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .info-value {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e6ebf2;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #5a87cf);
+      width: 0%;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .section-tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .list-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+    }
+
+    .list-item.done {
+      background: #f7fbf9;
+      border-color: #bfd9cc;
+    }
+
+    .item-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .item-type {
+      font-size: 11px;
+      letter-spacing: 0;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .item-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .quote {
+      margin: 0;
+      padding-left: 12px;
+      border-left: 3px solid #d1def8;
+      line-height: 1.8;
+      white-space: pre-wrap;
+    }
+
+    .note-text,
+    .todo-text {
+      margin: 0;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+
+    .tiny {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .empty {
+      border: 1px dashed var(--line-strong);
+      border-radius: 8px;
+      padding: 18px;
+      color: var(--muted);
+      background: #fbfcfd;
+      line-height: 1.7;
+    }
+
+    .footer-note {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .focus .sidebar {
+      display: none;
+    }
+
+    .focus .app {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .compact .layout,
+    .compact .hero-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    @media (max-width: 1080px) {
+      .app {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .hero-grid,
+      .layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .content,
+      .topbar {
+        padding: 16px;
+      }
+
+      .toolbar,
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div>
+          <h1>Reading Notes</h1>
+          <div class="meta">个人阅读与书摘整理</div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button id="toggleFocusBtn" type="button">专注模式</button>
+        <button id="exportBtn" type="button">导出数据</button>
+        <button id="importBtn" type="button">导入数据</button>
+        <button id="resetDemoBtn" type="button">恢复示例</button>
+      </div>
+
+      <div class="book-add">
+        <div class="meta">新增书目</div>
+        <input id="newBookTitle" type="text" placeholder="书名">
+        <input id="newBookAuthor" type="text" placeholder="作者 / 来源">
+        <button id="addBookBtn" type="button">添加到列表</button>
+      </div>
+
+      <div class="book-list" id="bookList"></div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="topbar-title">
+          <h2 id="pageTitle">阅读文档</h2>
+          <div class="meta">本地保存 | 快捷键 F 切换专注模式 | Ctrl + E 导出</div>
+        </div>
+        <div class="actions">
+          <button id="newQuoteBtn" type="button">新增书摘</button>
+          <button id="newNoteBtn" type="button">新增想法</button>
+          <button id="newTodoBtn" type="button">新增待办</button>
+          <button id="deleteBookBtn" type="button">删除本书</button>
+        </div>
+      </div>
+
+      <div class="content">
+        <section class="hero">
+          <div class="hero-grid">
+            <div class="stack">
+              <div>
+                <h3 id="bookHeading">未选择书目</h3>
+                <div class="tiny" id="bookSubheading">在左侧添加一本书开始整理你的阅读笔记。</div>
+              </div>
+              <textarea id="summaryInput" placeholder="在这里写章节摘要、要点摘录、复盘内容。"></textarea>
+            </div>
+            <div class="stack">
+              <div class="info-grid">
+                <div class="info-card">
+                  <div class="info-label">当前进度</div>
+                  <div class="info-value" id="progressText">0%</div>
+                  <input id="progressInput" type="range" min="0" max="100" step="1" value="0">
+                  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                </div>
+                <div class="info-card">
+                  <div class="info-label">当前位置</div>
+                  <input id="locationInput" type="text" placeholder="例如：第 4 章 / 48%">
+                </div>
+                <div class="info-card">
+                  <div class="info-label">最近阅读</div>
+                  <div class="info-value" id="updatedAtText">-</div>
+                </div>
+                <div class="info-card">
+                  <div class="info-label">状态标签</div>
+                  <input id="statusInput" type="text" placeholder="例如：进行中 / 已读完 / 想重读">
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="layout">
+          <div class="stack">
+            <section class="panel">
+              <div class="item-top">
+                <h3>书摘</h3>
+                <div class="section-tools">
+                  <button id="addQuoteInlineBtn" type="button">添加</button>
+                </div>
+              </div>
+              <div id="quotesList" class="list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="item-top">
+                <h3>想法</h3>
+                <div class="section-tools">
+                  <button id="addNoteInlineBtn" type="button">添加</button>
+                </div>
+              </div>
+              <div id="notesList" class="list"></div>
+            </section>
+          </div>
+
+          <div class="stack">
+            <section class="panel">
+              <div class="item-top">
+                <h3>待办</h3>
+                <div class="section-tools">
+                  <button id="addTodoInlineBtn" type="button">添加</button>
+                </div>
+              </div>
+              <div id="todosList" class="list"></div>
+            </section>
+
+            <section class="panel">
+              <h3>使用说明</h3>
+              <div class="empty">
+                这个页面是本地阅读笔记板，适合整理微信读书里的书摘、想法和进度。
+                所有内容都保存在当前浏览器本地，不上传。
+              </div>
+              <div class="tiny">
+                导出后会得到 JSON 文件，可用于备份或迁移到另一台电脑。
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <div class="footer-note" id="saveState">尚未保存</div>
+      </div>
+    </main>
+  </div>
+
+  <input id="fileInput" type="file" accept="application/json" class="hidden">
+
+  <script>
+    const STORAGE_KEY = "reading-notes-workbench-v1";
+
+    const demoData = {
+      books: [
+        {
+          id: crypto.randomUUID(),
+          title: "示例书目：置身事内",
+          author: "兰小欢",
+          summary: "这里可以写一段章节摘要，或者把微信读书上的划线整理成更清楚的复盘。\n\n建议一章一章写，后面回看很轻松。",
+          progress: 38,
+          location: "第三章 / 地方债务",
+          status: "进行中",
+          updatedAt: Date.now(),
+          quotes: [
+            {
+              id: crypto.randomUUID(),
+              text: "真正重要的不是记住原句，而是知道它为什么打中你。",
+              page: "第 3 章",
+              createdAt: Date.now()
+            }
+          ],
+          notes: [
+            {
+              id: crypto.randomUUID(),
+              text: "把地方财政、土地和基建放到同一个因果链里看，很多现象就突然合理了。",
+              createdAt: Date.now()
+            }
+          ],
+          todos: [
+            {
+              id: crypto.randomUUID(),
+              text: "回头补一页：地方融资平台和预算软约束的关系",
+              done: false,
+              createdAt: Date.now()
+            }
+          ]
+        }
+      ],
+      activeBookId: null
+    };
+
+    const els = {
+      bookList: document.getElementById("bookList"),
+      newBookTitle: document.getElementById("newBookTitle"),
+      newBookAuthor: document.getElementById("newBookAuthor"),
+      addBookBtn: document.getElementById("addBookBtn"),
+      pageTitle: document.getElementById("pageTitle"),
+      bookHeading: document.getElementById("bookHeading"),
+      bookSubheading: document.getElementById("bookSubheading"),
+      summaryInput: document.getElementById("summaryInput"),
+      progressInput: document.getElementById("progressInput"),
+      progressText: document.getElementById("progressText"),
+      progressFill: document.getElementById("progressFill"),
+      locationInput: document.getElementById("locationInput"),
+      statusInput: document.getElementById("statusInput"),
+      updatedAtText: document.getElementById("updatedAtText"),
+      quotesList: document.getElementById("quotesList"),
+      notesList: document.getElementById("notesList"),
+      todosList: document.getElementById("todosList"),
+      saveState: document.getElementById("saveState"),
+      exportBtn: document.getElementById("exportBtn"),
+      importBtn: document.getElementById("importBtn"),
+      fileInput: document.getElementById("fileInput"),
+      toggleFocusBtn: document.getElementById("toggleFocusBtn"),
+      resetDemoBtn: document.getElementById("resetDemoBtn"),
+      newQuoteBtn: document.getElementById("newQuoteBtn"),
+      newNoteBtn: document.getElementById("newNoteBtn"),
+      newTodoBtn: document.getElementById("newTodoBtn"),
+      addQuoteInlineBtn: document.getElementById("addQuoteInlineBtn"),
+      addNoteInlineBtn: document.getElementById("addNoteInlineBtn"),
+      addTodoInlineBtn: document.getElementById("addTodoInlineBtn"),
+      deleteBookBtn: document.getElementById("deleteBookBtn")
+    };
+
+    let state = loadState();
+    if (!state.activeBookId && state.books.length) {
+      state.activeBookId = state.books[0].id;
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        const seed = structuredClone(demoData);
+        seed.activeBookId = seed.books[0]?.id || null;
+        return seed;
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed.books)) {
+          throw new Error("invalid");
+        }
+        return parsed;
+      } catch (error) {
+        const seed = structuredClone(demoData);
+        seed.activeBookId = seed.books[0]?.id || null;
+        return seed;
+      }
+    }
+
+    function saveState(note) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      els.saveState.textContent = note || "已保存到本地";
+    }
+
+    function getActiveBook() {
+      return state.books.find((book) => book.id === state.activeBookId) || null;
+    }
+
+    function formatTime(value) {
+      if (!value) return "-";
+      return new Date(value).toLocaleString("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function touchBook(book) {
+      book.updatedAt = Date.now();
+      saveState("已自动保存");
+    }
+
+    function renderBooks() {
+      if (!state.books.length) {
+        els.bookList.innerHTML = '<div class="empty">还没有书。左上角填书名后添加一条就行。</div>';
+        return;
+      }
+
+      els.bookList.innerHTML = state.books.map((book) => `
+        <button class="book-card ${book.id === state.activeBookId ? "active" : ""}" type="button" data-book-id="${book.id}">
+          <div class="book-title">${escapeHtml(book.title)}</div>
+          <div class="book-subtitle">${escapeHtml(book.author || "未填写作者")}</div>
+          <div class="book-progress">进度 ${Number(book.progress || 0)}% | ${escapeHtml(book.status || "未标记")}</div>
+        </button>
+      `).join("");
+    }
+
+    function renderQuotes(book) {
+      if (!book.quotes.length) {
+        els.quotesList.innerHTML = '<div class="empty">这里放摘录下来的句子、段落，或者你自己整理后的关键表述。</div>';
+        return;
+      }
+
+      els.quotesList.innerHTML = book.quotes.map((item) => `
+        <article class="list-item">
+          <div class="item-top">
+            <div>
+              <div class="item-type">Quote</div>
+              <div class="tiny">${escapeHtml(item.page || "未标注位置")} | ${formatTime(item.createdAt)}</div>
+            </div>
+            <div class="item-actions">
+              <button type="button" data-action="edit-quote" data-id="${item.id}">编辑</button>
+              <button type="button" data-action="delete-quote" data-id="${item.id}">删除</button>
+            </div>
+          </div>
+          <p class="quote">${escapeHtml(item.text)}</p>
+        </article>
+      `).join("");
+    }
+
+    function renderNotes(book) {
+      if (!book.notes.length) {
+        els.notesList.innerHTML = '<div class="empty">把你的联想、质疑、总结写在这里。短一点也没关系。</div>';
+        return;
+      }
+
+      els.notesList.innerHTML = book.notes.map((item) => `
+        <article class="list-item">
+          <div class="item-top">
+            <div>
+              <div class="item-type">Note</div>
+              <div class="tiny">${formatTime(item.createdAt)}</div>
+            </div>
+            <div class="item-actions">
+              <button type="button" data-action="edit-note" data-id="${item.id}">编辑</button>
+              <button type="button" data-action="delete-note" data-id="${item.id}">删除</button>
+            </div>
+          </div>
+          <p class="note-text">${escapeHtml(item.text)}</p>
+        </article>
+      `).join("");
+    }
+
+    function renderTodos(book) {
+      if (!book.todos.length) {
+        els.todosList.innerHTML = '<div class="empty">记录待补章节、要回看的问题，或者下次阅读前要处理的东西。</div>';
+        return;
+      }
+
+      els.todosList.innerHTML = book.todos.map((item) => `
+        <article class="list-item ${item.done ? "done" : ""}">
+          <div class="item-top">
+            <div>
+              <div class="item-type">Todo</div>
+              <div class="tiny">${formatTime(item.createdAt)}</div>
+            </div>
+            <div class="item-actions">
+              <button type="button" data-action="toggle-todo" data-id="${item.id}">${item.done ? "设为未完成" : "完成"}</button>
+              <button type="button" data-action="edit-todo" data-id="${item.id}">编辑</button>
+              <button type="button" data-action="delete-todo" data-id="${item.id}">删除</button>
+            </div>
+          </div>
+          <p class="todo-text">${escapeHtml(item.text)}</p>
+        </article>
+      `).join("");
+    }
+
+    function renderActiveBook() {
+      const book = getActiveBook();
+      if (!book) {
+        els.pageTitle.textContent = "阅读文档";
+        els.bookHeading.textContent = "未选择书目";
+        els.bookSubheading.textContent = "在左侧添加一本书开始整理你的阅读笔记。";
+        els.summaryInput.value = "";
+        els.progressInput.value = 0;
+        els.progressText.textContent = "0%";
+        els.progressFill.style.width = "0%";
+        els.locationInput.value = "";
+        els.statusInput.value = "";
+        els.updatedAtText.textContent = "-";
+        els.quotesList.innerHTML = '<div class="empty">先添加一本书。</div>';
+        els.notesList.innerHTML = '<div class="empty">先添加一本书。</div>';
+        els.todosList.innerHTML = '<div class="empty">先添加一本书。</div>';
+        return;
+      }
+
+      els.pageTitle.textContent = book.title;
+      els.bookHeading.textContent = book.title;
+      els.bookSubheading.textContent = [book.author || "未填写作者", book.status || "未标记状态"].join(" | ");
+      els.summaryInput.value = book.summary || "";
+      els.progressInput.value = Number(book.progress || 0);
+      els.progressText.textContent = `${Number(book.progress || 0)}%`;
+      els.progressFill.style.width = `${Number(book.progress || 0)}%`;
+      els.locationInput.value = book.location || "";
+      els.statusInput.value = book.status || "";
+      els.updatedAtText.textContent = formatTime(book.updatedAt);
+      renderQuotes(book);
+      renderNotes(book);
+      renderTodos(book);
+    }
+
+    function render() {
+      renderBooks();
+      renderActiveBook();
+    }
+
+    function addBook() {
+      const title = els.newBookTitle.value.trim();
+      const author = els.newBookAuthor.value.trim();
+      if (!title) {
+        alert("先填个书名。");
+        return;
+      }
+
+      const book = {
+        id: crypto.randomUUID(),
+        title,
+        author,
+        summary: "",
+        progress: 0,
+        location: "",
+        status: "进行中",
+        updatedAt: Date.now(),
+        quotes: [],
+        notes: [],
+        todos: []
+      };
+
+      state.books.unshift(book);
+      state.activeBookId = book.id;
+      els.newBookTitle.value = "";
+      els.newBookAuthor.value = "";
+      saveState("已添加书目");
+      render();
+    }
+
+    function deleteActiveBook() {
+      const book = getActiveBook();
+      if (!book) return;
+      const ok = confirm(`删除《${book.title}》及其全部笔记？`);
+      if (!ok) return;
+      state.books = state.books.filter((item) => item.id !== book.id);
+      state.activeBookId = state.books[0]?.id || null;
+      saveState("已删除书目");
+      render();
+    }
+
+    function addQuote() {
+      const book = getActiveBook();
+      if (!book) return;
+      const text = prompt("输入书摘内容");
+      if (!text || !text.trim()) return;
+      const page = prompt("输入位置（可选，例如 第 4 章 / 位置 231）") || "";
+      book.quotes.unshift({
+        id: crypto.randomUUID(),
+        text: text.trim(),
+        page: page.trim(),
+        createdAt: Date.now()
+      });
+      touchBook(book);
+      render();
+    }
+
+    function addNote() {
+      const book = getActiveBook();
+      if (!book) return;
+      const text = prompt("输入想法");
+      if (!text || !text.trim()) return;
+      book.notes.unshift({
+        id: crypto.randomUUID(),
+        text: text.trim(),
+        createdAt: Date.now()
+      });
+      touchBook(book);
+      render();
+    }
+
+    function addTodo() {
+      const book = getActiveBook();
+      if (!book) return;
+      const text = prompt("输入待办");
+      if (!text || !text.trim()) return;
+      book.todos.unshift({
+        id: crypto.randomUUID(),
+        text: text.trim(),
+        done: false,
+        createdAt: Date.now()
+      });
+      touchBook(book);
+      render();
+    }
+
+    function updateBookFromFields() {
+      const book = getActiveBook();
+      if (!book) return;
+      book.summary = els.summaryInput.value;
+      book.location = els.locationInput.value.trim();
+      book.status = els.statusInput.value.trim();
+      book.progress = Number(els.progressInput.value);
+      touchBook(book);
+      renderActiveBook();
+    }
+
+    function exportState() {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `reading-notes-${stamp}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      els.saveState.textContent = "已导出 JSON";
+    }
+
+    function importState(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          if (!Array.isArray(parsed.books)) {
+            throw new Error("bad data");
+          }
+          state = parsed;
+          if (!state.activeBookId && state.books[0]) {
+            state.activeBookId = state.books[0].id;
+          }
+          saveState("已导入数据");
+          render();
+        } catch (error) {
+          alert("导入失败，文件格式不对。");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function restoreDemo() {
+      const ok = confirm("用示例数据覆盖当前本地数据？");
+      if (!ok) return;
+      state = structuredClone(demoData);
+      state.activeBookId = state.books[0]?.id || null;
+      saveState("已恢复示例");
+      render();
+    }
+
+    function handleListAction(event) {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const { action, id } = button.dataset;
+      const book = getActiveBook();
+      if (!book) return;
+
+      const groups = {
+        quote: book.quotes,
+        note: book.notes,
+        todo: book.todos
+      };
+
+      if (action === "edit-quote") {
+        const item = groups.quote.find((entry) => entry.id === id);
+        if (!item) return;
+        const text = prompt("编辑书摘", item.text);
+        if (!text || !text.trim()) return;
+        const page = prompt("编辑位置", item.page || "") || "";
+        item.text = text.trim();
+        item.page = page.trim();
+        touchBook(book);
+        render();
+      }
+
+      if (action === "delete-quote") {
+        book.quotes = book.quotes.filter((entry) => entry.id !== id);
+        touchBook(book);
+        render();
+      }
+
+      if (action === "edit-note") {
+        const item = groups.note.find((entry) => entry.id === id);
+        if (!item) return;
+        const text = prompt("编辑想法", item.text);
+        if (!text || !text.trim()) return;
+        item.text = text.trim();
+        touchBook(book);
+        render();
+      }
+
+      if (action === "delete-note") {
+        book.notes = book.notes.filter((entry) => entry.id !== id);
+        touchBook(book);
+        render();
+      }
+
+      if (action === "toggle-todo") {
+        const item = groups.todo.find((entry) => entry.id === id);
+        if (!item) return;
+        item.done = !item.done;
+        touchBook(book);
+        render();
+      }
+
+      if (action === "edit-todo") {
+        const item = groups.todo.find((entry) => entry.id === id);
+        if (!item) return;
+        const text = prompt("编辑待办", item.text);
+        if (!text || !text.trim()) return;
+        item.text = text.trim();
+        touchBook(book);
+        render();
+      }
+
+      if (action === "delete-todo") {
+        book.todos = book.todos.filter((entry) => entry.id !== id);
+        touchBook(book);
+        render();
+      }
+    }
+
+    function toggleFocusMode() {
+      document.body.classList.toggle("focus");
+      document.body.classList.toggle("compact");
+      const enabled = document.body.classList.contains("focus");
+      els.toggleFocusBtn.textContent = enabled ? "退出专注" : "专注模式";
+      els.saveState.textContent = enabled ? "已进入专注模式" : "已退出专注模式";
+    }
+
+    els.addBookBtn.addEventListener("click", addBook);
+    els.deleteBookBtn.addEventListener("click", deleteActiveBook);
+    els.summaryInput.addEventListener("input", updateBookFromFields);
+    els.progressInput.addEventListener("input", updateBookFromFields);
+    els.locationInput.addEventListener("input", updateBookFromFields);
+    els.statusInput.addEventListener("input", updateBookFromFields);
+    els.exportBtn.addEventListener("click", exportState);
+    els.importBtn.addEventListener("click", () => els.fileInput.click());
+    els.fileInput.addEventListener("change", (event) => {
+      const [file] = event.target.files;
+      if (file) importState(file);
+      event.target.value = "";
+    });
+    els.toggleFocusBtn.addEventListener("click", toggleFocusMode);
+    els.resetDemoBtn.addEventListener("click", restoreDemo);
+    els.newQuoteBtn.addEventListener("click", addQuote);
+    els.newNoteBtn.addEventListener("click", addNote);
+    els.newTodoBtn.addEventListener("click", addTodo);
+    els.addQuoteInlineBtn.addEventListener("click", addQuote);
+    els.addNoteInlineBtn.addEventListener("click", addNote);
+    els.addTodoInlineBtn.addEventListener("click", addTodo);
+    els.quotesList.addEventListener("click", handleListAction);
+    els.notesList.addEventListener("click", handleListAction);
+    els.todosList.addEventListener("click", handleListAction);
+
+    els.bookList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-book-id]");
+      if (!button) return;
+      state.activeBookId = button.dataset.bookId;
+      saveState("已切换书目");
+      render();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key.toLowerCase() === "f" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const target = event.target;
+        const isTyping = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+        if (!isTyping) {
+          toggleFocusMode();
+        }
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        exportState();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
