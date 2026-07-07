@@ -1,159 +1,191 @@
 {
-  "saved_at": "2026-06-24T11:12:10.946468",
+  "saved_at": "2026-07-07T10:06:01.407075",
   "symbol": "300014",
-  "strategy_version": 4,
-  "latest_daily_ts": "2026-06-23T00:00:00",
-  "daily_trend": "up",
+  "strategy_version": 5,
+  "latest_daily_ts": "2026-07-06T00:00:00",
+  "daily_trend": "down",
   "zones": [
     {
-      "name": "daily_support_3",
+      "name": "daily_support_1",
       "timeframe": "1d",
-      "low": 62.46386500214286,
-      "high": 64.16707928785715,
-      "score": 10,
+      "low": 58.73258256342858,
+      "high": 60.50722542057143,
+      "score": 8,
       "level": "A",
       "tags": [
         "support",
-        "fresh_zone",
+        "recently_tested",
+        "many_touches",
+        "with_fvg",
+        "with_partially_filled_fvg",
+        "with_liquidity",
+        "with_large_liquidity"
+      ],
+      "touches": 5,
+      "importance_score": 10,
+      "fragility_score": 3,
+      "invalidation_price": 57.845261134857154
+    },
+    {
+      "name": "daily_support_2",
+      "timeframe": "1d",
+      "low": 62.699056287428576,
+      "high": 64.47369914457143,
+      "score": 9,
+      "level": "A",
+      "tags": [
+        "support",
+        "many_touches",
         "with_fvg",
         "with_partially_filled_fvg",
         "with_liquidity",
         "with_large_liquidity",
         "with_order_block"
       ],
-      "touches": 4,
+      "touches": 5,
       "importance_score": 11,
-      "fragility_score": 1,
-      "invalidation_price": 61.61225785928572
+      "fragility_score": 2,
+      "invalidation_price": 61.81173485885715
     },
     {
-      "name": "daily_fib_retracement_0.5_166_192+daily_resistance_2+daily_fib_retracement_0.618_166_192+daily_resistance_3+daily_fib_extension_1.272_128_184+daily_fib_retracement_0.786_166_192+daily_resistance_4+daily_fib_extension_1.618_128_184+weekly_resistance_0+daily_resistance_5",
+      "name": "daily_resistance_1+daily_fib_retracement_0.382_157_194+daily_fib_retracement_0.5_157_194+daily_resistance_2+daily_fib_retracement_0.618_157_194+weekly_resistance_0+daily_resistance_3+daily_fib_retracement_0.786_157_194+daily_resistance_4+daily_fib_extension_1.272_180_189",
       "timeframe": "mixed",
-      "low": 64.50112949428572,
-      "high": 75.75921986285715,
-      "score": 7,
+      "low": 65.72164455942857,
+      "high": 75.79493414857143,
+      "score": 8,
       "level": "A",
       "tags": [
+        "congestion_member",
         "daily_fibonacci",
+        "fib_0.382",
         "fib_0.5",
         "fib_0.618",
         "fib_0.786",
         "fib_ext_1.272",
-        "fib_ext_1.618",
         "fresh_zone",
         "higher_timeframe",
         "many_touches",
         "merged_resistance",
+        "primary_congestion_resistance",
+        "recently_tested",
         "resistance",
         "weekly_resistance",
         "with_fibonacci",
-        "with_fvg",
         "with_large_liquidity",
         "with_liquidity",
         "with_order_block",
-        "with_partially_filled_fvg",
         "with_weekly_resistance"
       ],
       "touches": 8,
-      "importance_score": 9,
+      "importance_score": 10,
       "fragility_score": 5,
-      "invalidation_price": 76.75909518
+      "invalidation_price": 76.68225557714285
     },
     {
-      "name": "daily_support_4",
+      "name": "daily_congestion_0",
+      "timeframe": "mixed",
+      "low": 65.72164455942857,
+      "high": 76.41534379357142,
+      "score": 8,
+      "level": "A",
+      "tags": [
+        "congestion_zone",
+        "higher_conflict",
+        "mixed_congestion",
+        "resistance",
+        "support",
+        "with_weekly_resistance"
+      ],
+      "touches": 9,
+      "importance_score": 10,
+      "fragility_score": 7,
+      "invalidation_price": 76.68225557714285
+    },
+    {
+      "name": "daily_support_3",
       "timeframe": "1d",
-      "low": 65.89111325714285,
-      "high": 67.59432754285714,
+      "low": 65.85539897142857,
+      "high": 67.63004182857142,
       "score": 6,
       "level": "B",
       "tags": [
-        "support",
+        "congestion_member",
         "fresh_zone",
         "many_touches",
-        "with_liquidity",
+        "primary_congestion_support",
+        "support",
         "with_large_liquidity",
+        "with_liquidity",
         "with_order_block"
       ],
       "touches": 9,
       "importance_score": 8,
       "fragility_score": 6,
-      "invalidation_price": 65.0395061142857
+      "invalidation_price": 64.96807754285715
     },
     {
-      "name": "daily_support_5",
+      "name": "daily_support_4",
       "timeframe": "1d",
-      "low": 68.43494469714285,
-      "high": 70.13815898285715,
+      "low": 68.39923041142858,
+      "high": 70.17387326857143,
       "score": 7,
       "level": "B",
       "tags": [
-        "support",
+        "congestion_member",
+        "display_hidden",
         "fresh_zone",
-        "with_liquidity",
+        "inner_congestion_zone",
+        "support",
         "with_large_liquidity",
+        "with_liquidity",
         "with_order_block"
       ],
       "touches": 4,
       "importance_score": 8,
       "fragility_score": 1,
-      "invalidation_price": 67.5833375542857
+      "invalidation_price": 67.51190898285715
     },
     {
-      "name": "daily_support_6",
+      "name": "daily_support_5",
       "timeframe": "1d",
-      "low": 74.67641522214285,
-      "high": 76.37962950785715,
+      "low": 74.64070093642857,
+      "high": 76.41534379357142,
       "score": 6,
       "level": "B",
       "tags": [
-        "support",
+        "congestion_member",
         "fresh_zone",
-        "with_liquidity",
-        "with_large_liquidity"
+        "support",
+        "with_large_liquidity",
+        "with_liquidity"
       ],
       "touches": 4,
       "importance_score": 7,
       "fragility_score": 1,
-      "invalidation_price": 73.8248080792857
+      "invalidation_price": 73.75337950785715
     },
     {
       "name": "daily_support_0",
       "timeframe": "1d",
-      "low": 53.158392857142864,
-      "high": 54.861607142857146,
+      "low": 53.12267857142858,
+      "high": 54.89732142857143,
       "score": 3,
       "level": "C",
       "tags": [
         "support",
+        "fresh_zone",
         "with_order_block"
       ],
       "touches": 2,
       "importance_score": 3,
       "fragility_score": 0,
-      "invalidation_price": 52.30678571428572
+      "invalidation_price": 52.235357142857154
     },
     {
-      "name": "daily_support_1",
+      "name": "daily_resistance_5",
       "timeframe": "1d",
-      "low": 58.11305571714286,
-      "high": 59.816270002857145,
-      "score": 4,
-      "level": "C",
-      "tags": [
-        "support",
-        "fresh_zone",
-        "with_liquidity"
-      ],
-      "touches": 3,
-      "importance_score": 5,
-      "fragility_score": 1,
-      "invalidation_price": 57.26144857428572
-    },
-    {
-      "name": "daily_resistance_6",
-      "timeframe": "1d",
-      "low": 79.58399085714285,
-      "high": 81.28720514285715,
+      "low": 79.54827657142857,
+      "high": 81.32291942857142,
       "score": 3,
       "level": "C",
       "tags": [
@@ -164,13 +196,13 @@
       "touches": 2,
       "importance_score": 3,
       "fragility_score": 0,
-      "invalidation_price": 82.1388122857143
+      "invalidation_price": 82.21024085714285
     },
     {
-      "name": "daily_resistance_8",
+      "name": "daily_resistance_7",
       "timeframe": "1d",
-      "low": 88.74152544714286,
-      "high": 90.44473973285716,
+      "low": 88.70581116142858,
+      "high": 90.48045401857144,
       "score": 3,
       "level": "C",
       "tags": [
@@ -181,7 +213,7 @@
       "touches": 2,
       "importance_score": 4,
       "fragility_score": 1,
-      "invalidation_price": 91.2963468757143
+      "invalidation_price": 91.36777544714286
     }
   ]
 }

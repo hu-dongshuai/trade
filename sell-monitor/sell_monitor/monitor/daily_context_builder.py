@@ -11,7 +11,7 @@ from sell_monitor.zones.daily_fvg_detector import detect_daily_fvg
 from sell_monitor.zones.daily_liquidity_detector import detect_daily_liquidity_zones
 from sell_monitor.zones.daily_order_block_detector import detect_daily_order_blocks
 from sell_monitor.zones.daily_sr_detector import detect_daily_sr_zones
-from sell_monitor.zones.daily_zone_filter import filter_current_daily_zones, prepare_daily_zones
+from sell_monitor.zones.daily_zone_filter import filter_current_daily_zones, is_congestion_zone, is_hidden_display_zone, prepare_daily_zones
 from sell_monitor.zones.daily_zone_ranker import rank_daily_zones
 from sell_monitor.zones.weekly_resistance_detector import detect_weekly_resistance_zones
 
@@ -78,6 +78,8 @@ def _daily_active_zones(zones: list[PriceZone]) -> list[PriceZone]:
     return [
         zone
         for zone in zones
+        if not is_hidden_display_zone(zone)
+        and not is_congestion_zone(zone)
         if zone.level in {ZoneLevel.A, ZoneLevel.B}
         or (zone.level == ZoneLevel.C and "resistance" in zone.tags)
     ]

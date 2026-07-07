@@ -35,5 +35,10 @@ class EntryContext:
     avg_daily_turnover: float
     recent_5d_return: float
     recent_10d_return: float
+    weekly_background: str
+    accumulation_score: int
+    accumulation_reasons: list[str]
+    weekly_support_zones: list[PriceZone]
+    weekly_resistance_zones: list[PriceZone]
     daily_support_zones: list[PriceZone]
     daily_resistance_zones: list[PriceZone]

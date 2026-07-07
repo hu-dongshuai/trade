@@ -32,10 +32,12 @@ SELL_MONITOR_EMAIL_TO=you@example.com
 SELL_MONITOR_EMAIL_SUBJECT_PREFIX=[SellMonitor]
 
 # Telegram 提醒
-# 卖出侧：仅在卖出分数 >= 8 且动作是 reduce / stop_loss / exit_all 时发送
+# 卖出侧：仅在卖出分数 >= 5 且动作是 reduce / stop_loss / exit_all 时发送
 # 开仓侧：仅在 allowed=yes 时发送
 SELL_MONITOR_TELEGRAM_BOT_TOKEN=your-bot-token
 SELL_MONITOR_TELEGRAM_CHAT_ID=your-chat-id
 SELL_MONITOR_TELEGRAM_SUBJECT_PREFIX=[SellMonitor]
 SELL_MONITOR_TELEGRAM_API_BASE_URL=https://api.telegram.org
+# 如果本机直连 Telegram 不通，可填写本地代理，例如 http://127.0.0.1:7890
+# SELL_MONITOR_TELEGRAM_PROXY=http://127.0.0.1:7890
 ```

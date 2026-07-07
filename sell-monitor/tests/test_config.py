@@ -98,6 +98,7 @@ class ConfigTest(unittest.TestCase):
                         "SELL_MONITOR_TELEGRAM_BOT_TOKEN=123456:abc",
                         "SELL_MONITOR_TELEGRAM_CHAT_ID=987654321",
                         "SELL_MONITOR_TELEGRAM_SUBJECT_PREFIX=[TG]",
+                        "SELL_MONITOR_TELEGRAM_PROXY=http://127.0.0.1:7890",
                     ]
                 )
                 + "\n",
@@ -108,6 +109,7 @@ class ConfigTest(unittest.TestCase):
                 "SELL_MONITOR_TELEGRAM_BOT_TOKEN",
                 "SELL_MONITOR_TELEGRAM_CHAT_ID",
                 "SELL_MONITOR_TELEGRAM_SUBJECT_PREFIX",
+                "SELL_MONITOR_TELEGRAM_PROXY",
             ]
             previous = {key: os.environ.pop(key, None) for key in keys}
             try:
@@ -118,6 +120,7 @@ class ConfigTest(unittest.TestCase):
                 self.assertEqual("123456:abc", config.telegram.bot_token)
                 self.assertEqual("987654321", config.telegram.chat_id)
                 self.assertEqual("[TG]", config.telegram.subject_prefix)
+                self.assertEqual("http://127.0.0.1:7890", config.telegram.proxy_url)
             finally:
                 for key, value in previous.items():
                     if value is None:

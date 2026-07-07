@@ -6,9 +6,10 @@ from pathlib import Path
 
 from sell_monitor.domain.enums import ZoneLevel
 from sell_monitor.domain.models import Bar, FundamentalSnapshot, PriceZone, Quote
+from sell_monitor.zones.daily_zone_filter import is_hidden_display_zone
 
 
-DAILY_ZONE_CACHE_VERSION = 4
+DAILY_ZONE_CACHE_VERSION = 5
 
 
 class FileMarketDataCache:
@@ -295,6 +296,7 @@ class FileMarketDataCache:
         zones: list[PriceZone],
         daily_trend: str,
     ) -> None:
+        visible_zones = [zone for zone in zones if not is_hidden_display_zone(zone)]
         lines = [
             f"# {symbol} 日线关键价位",
             "",
@@ -305,14 +307,14 @@ class FileMarketDataCache:
             "| 周期 | 等级 | 名称 | 区间下沿 | 区间上沿 | 净分 | 重要性 | 脆弱性 | 失效价 | 触达次数 | 标签 |",
             "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
         ]
-        for zone in zones:
+        for zone in visible_zones:
             invalidation = f"{zone.invalidation_price:.2f}" if zone.invalidation_price is not None else "-"
             lines.append(
                 f"| {zone.timeframe} | {zone.level.value} | {zone.name} | {zone.low:.2f} | {zone.high:.2f} | "
                 f"{zone.score} | {zone.importance_score} | {zone.fragility_score} | {invalidation} | "
                 f"{zone.touches} | {', '.join(zone.tags)} |"
             )
-        if not zones:
+        if not visible_zones:
             lines.append("| - | - | 无有效关键价位 | - | - | - | - | - | - | - | - |")
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

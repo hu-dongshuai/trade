@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sell_monitor.domain.enums import ZoneLevel
 from sell_monitor.domain.models import DailyContext
+from sell_monitor.entry.multi_timeframe import build_weekly_entry_view
 from sell_monitor.entry.models import EntryContext
 from sell_monitor.indicators.ma import closing_ma
 
@@ -25,6 +26,9 @@ def build_entry_context(daily_context: DailyContext, symbol_name: str | None = N
     daily_relative_strength_ok = recent_5d_return >= 0 and recent_10d_return >= 3
     avg_daily_turnover = _avg_daily_turnover(daily_bars, 20)
     liquidity_ok = avg_daily_turnover >= 20_000_000
+    weekly_support_zones, weekly_resistance_zones, weekly_background, accumulation_score, accumulation_reasons = (
+        build_weekly_entry_view(daily_bars, current_price, is_m60_trend_healthy)
+    )
 
     daily_support_zones = [
         zone
@@ -51,6 +55,11 @@ def build_entry_context(daily_context: DailyContext, symbol_name: str | None = N
         avg_daily_turnover=avg_daily_turnover,
         recent_5d_return=recent_5d_return,
         recent_10d_return=recent_10d_return,
+        weekly_background=weekly_background,
+        accumulation_score=accumulation_score,
+        accumulation_reasons=accumulation_reasons,
+        weekly_support_zones=weekly_support_zones,
+        weekly_resistance_zones=weekly_resistance_zones,
         daily_support_zones=daily_support_zones,
         daily_resistance_zones=daily_resistance_zones,
     )

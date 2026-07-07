@@ -8,8 +8,8 @@ from sell_monitor.config import load_default_config
 from sell_monitor.data.provider_factory import build_market_data_provider
 from sell_monitor.domain.enums import EntryAction
 from sell_monitor.entry.entry_scan_service import EntryScanService
-from sell_monitor.notifier.channels.telegram import TelegramChannel
 from sell_monitor.notifier.channels.entry_obsidian import ObsidianEntryRunRecorder
+from sell_monitor.notifier.channels.telegram import TelegramChannel
 from sell_monitor.notifier.entry_dispatcher import EntryAlertDispatcher, EntryConsoleChannel
 from sell_monitor.notifier.symbol_display import display_symbol
 from sell_monitor.storage.watchlist_factory import build_watchlist_store
@@ -39,13 +39,13 @@ def main() -> int:
     current_time = now_china()
     if not args.ignore_trading_hours and not is_a_share_trading_time(current_time):
         print(
-            f"[{current_time.strftime('%Y-%m-%d %H:%M:%S')}] 非A股交易时段，跳过本轮实时开仓检查。"
+            f"[{current_time.strftime('%Y-%m-%d %H:%M:%S')}] 非 A 股交易时段，跳过本轮实时开仓检查。"
             f"{describe_a_share_trading_hours()}。"
         )
         return 0
 
     if not config.obsidian_entry:
-        print("未配置 Obsidian 开仓检查目录或 watchlist 路径。")
+        print("未配置 Obsidian 开仓检查目录或 entry watchlist 路径。")
         return 1
 
     watchlist_store = build_watchlist_store(config, mode="entry")
@@ -86,11 +86,14 @@ def main() -> int:
         if telegram_channel and _should_send_entry_telegram(decision):
             try:
                 telegram_channel.send(
-                    subject=f"{config.telegram.subject_prefix} 开仓提醒 {display_symbol(decision.symbol, decision.symbol_name)} score={decision.entry_score}",
+                    subject=(
+                        f"{config.telegram.subject_prefix} 开仓提醒 "
+                        f"{display_symbol(decision.symbol, decision.symbol_name)} score={decision.entry_score}"
+                    ),
                     message=_format_entry_telegram_message(decision),
                 )
             except Exception as exc:
-                print(f"[Telegram] {display_symbol(decision.symbol, decision.symbol_name)} 发送失败: {exc}")
+                print(f"[Telegram] {display_symbol(decision.symbol, decision.symbol_name)} 发送失败：{exc}")
 
     close = getattr(provider, "close", None)
     if callable(close):
@@ -107,6 +110,7 @@ def _format_entry_telegram_message(decision) -> str:
     return (
         f"股票: {display_symbol(decision.symbol, decision.symbol_name)}\n"
         f"类型: 买入\n"
+        f"路线: {_route_label(decision.entry_route)}\n"
         f"动作: {decision.action.value}\n"
         f"分数: {decision.entry_score}\n"
         f"理由:\n{reason_lines}\n"
@@ -114,6 +118,14 @@ def _format_entry_telegram_message(decision) -> str:
         f"止损价: {_fmt(decision.stop_loss_price)}\n"
         f"第一止盈位: {_fmt(decision.first_take_profit_price)}"
     )
+
+
+def _route_label(route: str) -> str:
+    if route == "standard_entry":
+        return "标准开仓"
+    if route == "t_reentry":
+        return "T仓回补"
+    return "禁止回补"
 
 
 def _fmt(value: float | None) -> str:

@@ -21,6 +21,7 @@ class EntryBacktestEvent:
     symbol_name: str | None
     as_of_date: str
     allowed: bool
+    entry_route: str
     entry_model: str
     entry_score: int
     planned_entry_price: float | None
@@ -131,13 +132,13 @@ def format_backtest_report(result: EntryBacktestResult, start_date: str, end_dat
         [
             "## 明细",
             "",
-            "| 日期 | 股票代码 | 股票名称 | 允许开仓 | 开仓模型 | 开仓分数 | 计划挂单价 | 止损价 | 第一止盈位 | 盈亏比 | 15日最大上涨 | 15日最大回撤 | TP1触达 | 止损触发 | 原因 |",
-            "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
+            "| 日期 | 股票代码 | 股票名称 | 允许开仓 | 开仓路线 | 开仓模型 | 开仓分数 | 计划挂单价 | 止损价 | 第一止盈位 | 盈亏比 | 15日最大上涨 | 15日最大回撤 | TP1触达 | 止损触发 | 原因 |",
+            "| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
         ]
     )
     for event in result.events:
         lines.append(
-            f"| {event.as_of_date} | {event.symbol} | {event.symbol_name or event.symbol} | {'是' if event.allowed else '否'} | {event.entry_model} | {event.entry_score} | "
+            f"| {event.as_of_date} | {event.symbol} | {event.symbol_name or event.symbol} | {'是' if event.allowed else '否'} | {_route_label(event.entry_route)} | {event.entry_model} | {event.entry_score} | "
             f"{_fmt(event.planned_entry_price)} | {_fmt(event.stop_loss_price)} | {_fmt(event.first_take_profit_price)} | {_fmt(event.risk_reward_ratio)} | "
             f"{event.max_runup_15d:.2f}% | {event.max_drawdown_15d:.2f}% | {'是' if event.hit_tp1 else '否'} | {'是' if event.hit_stop else '否'} | {event.reason} |"
         )
@@ -162,6 +163,7 @@ def _build_event(
         symbol_name=symbol_name,
         as_of_date=day_bar.ts.strftime("%Y-%m-%d"),
         allowed=decision.allowed,
+        entry_route=decision.entry_route,
         entry_model=decision.entry_model,
         entry_score=decision.entry_score,
         planned_entry_price=decision.planned_entry_price,
@@ -213,6 +215,14 @@ def _fmt(value: float | None) -> str:
     if value is None:
         return "-"
     return f"{value:.2f}"
+
+
+def _route_label(route: str) -> str:
+    if route == "standard_entry":
+        return "标准开仓"
+    if route == "t_reentry":
+        return "T仓回补"
+    return "禁止回补"
 
 
 if __name__ == "__main__":

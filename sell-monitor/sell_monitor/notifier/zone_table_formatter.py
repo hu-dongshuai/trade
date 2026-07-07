@@ -1,21 +1,25 @@
 from __future__ import annotations
 
 from sell_monitor.domain.models import PriceZone
+from sell_monitor.zones.daily_zone_filter import is_congestion_zone, is_hidden_display_zone
+
+
+ZONE_TABLE_TITLE = "### 支撑压力位"
+ZONE_TABLE_HEADER = (
+    "| 股票 | 周期 | 等级 | 类型 | 区间下沿 | 区间上沿 | 分数 | 重要性 | 脆弱性 | 失效价 | 触达次数 | 标签 |"
+)
+ZONE_TABLE_SEPARATOR = "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |"
 
 
 def format_zone_table(zones: list[PriceZone], symbol: str | None = None) -> list[str]:
-    lines = [
-        "### 支撑压力位",
-        "",
-        "| 股票 | 周期 | 等级 | 类型 | 区间下沿 | 区间上沿 | 净分 | 重要性 | 脆弱性 | 失效价 | 触达次数 | 标签 |",
-        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
-    ]
-    if not zones:
+    lines = [ZONE_TABLE_TITLE, "", ZONE_TABLE_HEADER, ZONE_TABLE_SEPARATOR]
+    visible_zones = [zone for zone in zones if not is_hidden_display_zone(zone)]
+    if not visible_zones:
         lines.append(f"| {symbol or '-'} | - | - | 无有效支撑压力位 | - | - | - | - | - | - | - | - |")
         lines.append("")
         return lines
 
-    for zone in zones:
+    for zone in visible_zones:
         zone_type = _zone_type(zone)
         invalidation = f"{zone.invalidation_price:.2f}" if zone.invalidation_price is not None else "-"
         lines.append(
@@ -38,6 +42,8 @@ def format_multi_symbol_zone_tables(zone_snapshots: dict[str, list[PriceZone]]) 
 
 
 def _zone_type(zone: PriceZone) -> str:
+    if is_congestion_zone(zone):
+        return "拥挤区"
     has_support = "support" in zone.tags
     has_resistance = "resistance" in zone.tags
     if has_support and has_resistance:

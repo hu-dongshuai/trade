@@ -34,6 +34,7 @@ class TelegramConfig:
     chat_id: str
     subject_prefix: str = "[SellMonitor]"
     api_base_url: str = "https://api.telegram.org"
+    proxy_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -156,7 +157,22 @@ def _load_telegram_config() -> TelegramConfig | None:
         chat_id=chat_id,
         subject_prefix=os.getenv("SELL_MONITOR_TELEGRAM_SUBJECT_PREFIX", "[SellMonitor]"),
         api_base_url=os.getenv("SELL_MONITOR_TELEGRAM_API_BASE_URL", "https://api.telegram.org").strip(),
+        proxy_url=_read_optional_proxy(
+            "SELL_MONITOR_TELEGRAM_PROXY",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "HTTP_PROXY",
+            "http_proxy",
+        ),
     )
+
+
+def _read_optional_proxy(*names: str) -> str | None:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return None
 
 
 def _load_obsidian_monitor_config() -> ObsidianMonitorConfig | None:

@@ -51,6 +51,55 @@ class ActivationGateTest(unittest.TestCase):
 
         self.assertIsNone(active)
 
+    def test_congestion_mid_does_not_activate_monitoring(self) -> None:
+        resistance = PriceZone(
+            name="daily_resistance_a",
+            timeframe="1d",
+            low=65.8,
+            high=75.8,
+            score=8,
+            level=ZoneLevel.A,
+            tags=["resistance", "primary_congestion_resistance", "congestion_member"],
+        )
+        congestion = PriceZone(
+            name="daily_congestion_0",
+            timeframe="mixed",
+            low=65.8,
+            high=75.8,
+            score=8,
+            level=ZoneLevel.A,
+            tags=["congestion_zone", "support", "resistance"],
+        )
+
+        active = find_active_zone(70.5, 1.0, [resistance, congestion])
+
+        self.assertIsNone(active)
+
+    def test_prefers_narrower_support_when_support_and_resistance_overlap(self) -> None:
+        support = PriceZone(
+            name="support_b",
+            timeframe="1d",
+            low=64.4,
+            high=66.1,
+            score=7,
+            level=ZoneLevel.A,
+            tags=["support", "primary_congestion_support"],
+        )
+        resistance = PriceZone(
+            name="resistance_a",
+            timeframe="1d",
+            low=64.8,
+            high=77.0,
+            score=8,
+            level=ZoneLevel.A,
+            tags=["resistance", "primary_congestion_resistance"],
+        )
+
+        active = find_active_zone(65.8, 1.0, [support, resistance])
+
+        self.assertIsNotNone(active)
+        self.assertEqual("support_b", active.name)
+
 
 if __name__ == "__main__":
     unittest.main()

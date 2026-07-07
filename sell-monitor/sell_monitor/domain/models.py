@@ -169,11 +169,29 @@ class Decision:
 
 
 @dataclass(frozen=True)
+class AlertReviewRecord:
+    alert_id: str
+    symbol: str
+    action: Action
+    alert_ts: datetime
+    price: float
+    score: int
+    reasons: list[str]
+    symbol_name: str | None = None
+    review_window_days: int = 5
+    review_status: str = "pending"
+    reviewed_at: datetime | None = None
+    drawdown_pct: float | None = None
+    runup_pct: float | None = None
+
+
+@dataclass(frozen=True)
 class EntryDecision:
     symbol: str
     action: EntryAction
     allowed: bool
     entry_score: int
+    entry_route: str
     entry_model: str
     planned_entry_price: float | None
     stop_loss_price: float | None
@@ -192,6 +210,7 @@ class MonitorRunResult:
     notices: list[str]
     zone_snapshots: dict[str, list[PriceZone]] = field(default_factory=dict)
     daily_bar_snapshots: dict[str, list[Bar]] = field(default_factory=dict)
+    reviewed_alerts: list[AlertReviewRecord] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

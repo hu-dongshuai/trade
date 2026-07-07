@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from sell_monitor.domain.models import Bar, PriceZone
 from sell_monitor.entry.models import EntryCandidate, EntryContext
@@ -42,6 +42,13 @@ def _detect_pullback_entry(
     reasons: list[str] = []
     blocking_reasons: list[str] = []
     hard_blocking_reasons: list[str] = []
+    _apply_multi_timeframe_gate(
+        context,
+        reasons,
+        blocking_reasons,
+        hard_blocking_reasons,
+        require_accumulation=True,
+    )
 
     if context.is_trend_healthy:
         score += 2
@@ -90,11 +97,11 @@ def _detect_pullback_entry(
     else:
         hard_blocking_reasons.append("回踩过程量价不健康，存在放量走弱迹象")
 
-    if rr is not None and rr >= 2.0:
+    if rr is not None and rr >= 1.5:
         score += 1
         reasons.append(f"第一止盈位空间充足，盈亏比约 {rr:.2f}")
     else:
-        hard_blocking_reasons.append("第一止盈位空间不足，盈亏比低于 2:1")
+        hard_blocking_reasons.append("第一止盈位空间不足，盈亏比低于 1.5:1")
 
     if "with_fvg" in support.tags or "with_order_block" in support.tags:
         score += 1
@@ -113,6 +120,7 @@ def _detect_pullback_entry(
     if _resistance_too_close(context, support, target):
         hard_blocking_reasons.append("上方压力过近，空间不足，不适合做回踩开仓")
 
+    score += _multi_timeframe_score_bonus(context, reasons, blocking_reasons)
     return EntryCandidate(
         model="pullback_buy",
         score=min(score, 10),
@@ -147,6 +155,13 @@ def _detect_order_block_entry(
     reasons: list[str] = []
     blocking_reasons: list[str] = []
     hard_blocking_reasons: list[str] = []
+    _apply_multi_timeframe_gate(
+        context,
+        reasons,
+        blocking_reasons,
+        hard_blocking_reasons,
+        require_accumulation=True,
+    )
 
     if context.is_trend_healthy:
         score += 2
@@ -191,11 +206,11 @@ def _detect_order_block_entry(
     else:
         hard_blocking_reasons.append("小周期未给出明确承接确认")
 
-    if rr is not None and rr >= 2.0:
+    if rr is not None and rr >= 1.5:
         score += 1
         reasons.append(f"第一止盈位空间充足，盈亏比约 {rr:.2f}")
     else:
-        hard_blocking_reasons.append("第一止盈位空间不足，盈亏比低于 2:1")
+        hard_blocking_reasons.append("第一止盈位空间不足，盈亏比低于 1.5:1")
 
     if "many_touches" in order_block.tags or order_block.fragility_score >= 2:
         hard_blocking_reasons.append("订单块已被反复回踩，承接边际下降")
@@ -204,6 +219,7 @@ def _detect_order_block_entry(
     if _resistance_too_close(context, order_block, target):
         hard_blocking_reasons.append("上方压力过近，订单块承接空间不足")
 
+    score += _multi_timeframe_score_bonus(context, reasons, blocking_reasons)
     return EntryCandidate(
         model="order_block_buy",
         score=min(score, 10),
@@ -237,6 +253,13 @@ def _detect_breakout_entry(
     reasons: list[str] = []
     blocking_reasons: list[str] = []
     hard_blocking_reasons: list[str] = []
+    _apply_multi_timeframe_gate(
+        context,
+        reasons,
+        blocking_reasons,
+        hard_blocking_reasons,
+        require_accumulation=False,
+    )
 
     if context.is_trend_healthy:
         score += 2
@@ -274,11 +297,11 @@ def _detect_breakout_entry(
     else:
         hard_blocking_reasons.append("突破后的首次回调承接不够清晰")
 
-    if rr is not None and rr >= 2.0:
+    if rr is not None and rr >= 1.5:
         score += 1
         reasons.append(f"突破后第一目标位空间充足，盈亏比约 {rr:.2f}")
     else:
-        hard_blocking_reasons.append("突破后目标位空间不足，盈亏比低于 2:1")
+        hard_blocking_reasons.append("突破后目标位空间不足，盈亏比低于 1.5:1")
 
     if context.sector_state in {"strong", "up"}:
         score += 1
@@ -289,6 +312,7 @@ def _detect_breakout_entry(
     if _resistance_too_close(context, None, target, breakout_level):
         hard_blocking_reasons.append("突破上方立即遇到高等级压力，不做追涨突破")
 
+    score += _multi_timeframe_score_bonus(context, reasons, blocking_reasons, breakout_mode=True)
     return EntryCandidate(
         model="breakout_buy",
         score=min(score, 10),
@@ -447,3 +471,49 @@ def _resistance_too_close(
     if downside <= 0:
         return True
     return upside / downside < 2.3
+
+
+def _apply_multi_timeframe_gate(
+    context: EntryContext,
+    reasons: list[str],
+    blocking_reasons: list[str],
+    hard_blocking_reasons: list[str],
+    require_accumulation: bool,
+) -> None:
+    if context.weekly_background == "A":
+        reasons.append("周线背景为A类：位置更适合观察回踩吸筹")
+    elif context.weekly_background == "B":
+        reasons.append("周线背景为B类：位置中性，需依赖更强确认")
+    else:
+        hard_blocking_reasons.append("周线背景为C类：更接近高位压力或周线走弱，不按吸筹开仓处理")
+
+    if require_accumulation and context.accumulation_score <= 3:
+        hard_blocking_reasons.append("多周期洗盘吸筹辅助分过低，当前更像普通弱势回调")
+    elif require_accumulation and context.accumulation_score <= 6:
+        blocking_reasons.append("多周期洗盘吸筹结构仅为中性，需等待更强承接后再评估")
+
+
+def _multi_timeframe_score_bonus(
+    context: EntryContext,
+    reasons: list[str],
+    blocking_reasons: list[str],
+    breakout_mode: bool = False,
+) -> int:
+    bonus = 0
+    if context.weekly_background == "A":
+        bonus += 2 if not breakout_mode else 1
+    elif context.weekly_background == "B":
+        bonus += 1
+
+    if context.accumulation_score >= 7:
+        bonus += 1
+        reasons.append(f"多周期洗盘吸筹辅助分 {context.accumulation_score}/10，结构偏强")
+    elif breakout_mode and context.accumulation_score <= 3:
+        blocking_reasons.append("多周期结构偏弱，突破延续性需要额外观察")
+    elif context.accumulation_score >= 4:
+        reasons.append(f"多周期洗盘吸筹辅助分 {context.accumulation_score}/10，结构中性")
+
+    for extra_reason in context.accumulation_reasons[:3]:
+        if extra_reason not in reasons:
+            reasons.append(extra_reason)
+    return bonus

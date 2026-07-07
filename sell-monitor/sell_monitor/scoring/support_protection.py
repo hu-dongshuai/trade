@@ -5,6 +5,7 @@ from sell_monitor.domain.models import Bar, DailyContext, Decision, PriceZone, S
 from sell_monitor.indicators.atr import compute_atr
 from sell_monitor.indicators.ma import closing_ma
 from sell_monitor.indicators.volume_stats import average_volume
+from sell_monitor.zones.daily_zone_filter import is_hidden_display_zone
 
 
 UNFILTERABLE_SIGNAL_NAMES = {
@@ -132,13 +133,16 @@ def find_ab_level_support_bias(
         for zone in zones
         if "support" in zone.tags
         and zone.level in {ZoneLevel.A, ZoneLevel.B}
+        and not is_hidden_display_zone(zone)
         and current_price >= _support_invalidation_price(zone)
+        and _support_is_actionable(current_price, zone)
     ]
     resistances = [
         zone
         for zone in zones
         if "resistance" in zone.tags
         and zone.level in {ZoneLevel.A, ZoneLevel.B, ZoneLevel.C}
+        and not is_hidden_display_zone(zone)
         and current_price <= zone.high
     ]
     if not supports or not resistances:
@@ -165,6 +169,8 @@ def find_protective_daily_support(current_price: float, zones: list[PriceZone], 
         for zone in zones
         if "support" in zone.tags
         and zone.level in {ZoneLevel.A, ZoneLevel.B}
+        and not is_hidden_display_zone(zone)
+        and _support_is_actionable(current_price, zone)
         and _support_invalidation_price(zone) <= current_price <= zone.high + protection_pad
     ]
     if not supports:
@@ -174,6 +180,14 @@ def find_protective_daily_support(current_price: float, zones: list[PriceZone], 
 
 def _support_invalidation_price(zone: PriceZone) -> float:
     return zone.invalidation_price if zone.invalidation_price is not None else zone.low
+
+
+def _support_is_actionable(current_price: float, zone: PriceZone) -> bool:
+    if "primary_congestion_support" not in zone.tags:
+        return True
+    span = max(zone.high - zone.low, 1e-9)
+    buffer = max(span * 0.8, current_price * 0.015)
+    return current_price <= zone.high + buffer
 
 
 def _distance_to_zone(price: float, zone: PriceZone) -> float:

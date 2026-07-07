@@ -5,6 +5,7 @@ from pathlib import Path
 
 from sell_monitor.domain.enums import ZoneLevel
 from sell_monitor.domain.models import Bar, PriceZone
+from sell_monitor.zones.daily_zone_filter import is_congestion_zone, is_hidden_display_zone
 
 
 WIDTH = 1200
@@ -31,9 +32,10 @@ def render_weekly_zone_chart(
 
 
 def _build_svg(symbol: str, weekly_bars: list[Bar], zones: list[PriceZone]) -> str:
+    visible_zones = [zone for zone in zones if not is_hidden_display_zone(zone)]
     plot_width = WIDTH - LEFT_PAD - RIGHT_PAD
     plot_height = HEIGHT - TOP_PAD - BOTTOM_PAD
-    price_low, price_high = _price_bounds(weekly_bars, zones)
+    price_low, price_high = _price_bounds(weekly_bars, visible_zones)
 
     def x_for(index: int) -> float:
         if len(weekly_bars) <= 1:
@@ -61,7 +63,7 @@ def _build_svg(symbol: str, weekly_bars: list[Bar], zones: list[PriceZone]) -> s
             f'<text x="{LEFT_PAD + plot_width + 10}" y="{y + 4:.2f}" fill="#a8a8a8" font-size="12" font-family="Arial">{price:.2f}</text>'
         )
 
-    for zone in zones:
+    for zone in visible_zones:
         if "support" not in zone.tags and "resistance" not in zone.tags:
             continue
         low_y = y_for(zone.low)
@@ -73,7 +75,8 @@ def _build_svg(symbol: str, weekly_bars: list[Bar], zones: list[PriceZone]) -> s
         lines.append(
             f'<rect x="{LEFT_PAD}" y="{rect_y:.2f}" width="{plot_width}" height="{rect_h:.2f}" fill="{color}" opacity="{opacity:.2f}"/>'
         )
-        label = f'{zone.level.value} {zone.low:.2f}-{zone.high:.2f}'
+        label_prefix = "拥挤区" if is_congestion_zone(zone) else zone.level.value
+        label = f"{label_prefix} {zone.low:.2f}-{zone.high:.2f}"
         lines.append(
             f'<text x="{LEFT_PAD + plot_width - 5}" y="{rect_y + 14:.2f}" text-anchor="end" fill="{color}" font-size="12" font-family="Arial">{_escape(label)}</text>'
         )
@@ -123,6 +126,8 @@ def _price_bounds(weekly_bars: list[Bar], zones: list[PriceZone]) -> tuple[float
 
 
 def _zone_color(zone: PriceZone) -> str:
+    if is_congestion_zone(zone):
+        return "#d6b44c"
     if "support" in zone.tags and "resistance" not in zone.tags:
         return "#21b36b"
     if "resistance" in zone.tags and "support" not in zone.tags:

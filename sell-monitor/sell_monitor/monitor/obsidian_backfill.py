@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import datetime, time, timedelta
 from pathlib import Path
 
 from sell_monitor.data.akshare_provider import MarketDataError
-from sell_monitor.domain.models import Position, UserRule
+from sell_monitor.domain.models import Decision, Position, UserRule
 from sell_monitor.monitor.replay_decision import build_replay_decision
 from sell_monitor.notifier.channels.obsidian import ObsidianMonitorRunRecorder
 from sell_monitor.trading_time import CHINA_TZ
@@ -29,6 +30,7 @@ def backfill_missing_obsidian_records(
     positions: dict[str, Position],
     rules: dict[str, UserRule],
     current_time: datetime,
+    on_backfilled_decision: Callable[[datetime, Decision], None] | None = None,
 ) -> list[str]:
     notices: list[str] = []
     targets = _target_checkpoints(current_time)
@@ -80,6 +82,8 @@ def backfill_missing_obsidian_records(
                 daily_bar_snapshots={symbol: replay.daily_bars},
                 now=as_of_dt.replace(tzinfo=None),
             )
+            if on_backfilled_decision is not None:
+                on_backfilled_decision(as_of_dt.replace(tzinfo=None), replay.decision)
         notices.append(f"[{symbol}] 历史检测记录回溯补齐完成")
     return notices
 

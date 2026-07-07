@@ -6,7 +6,8 @@ from sell_monitor.domain.models import Bar, PriceZone
 
 def prepare_daily_zones(zones: list[PriceZone], daily_bars: list[Bar], daily_atr: float) -> list[PriceZone]:
     unbroken = [zone for zone in zones if not _is_effectively_broken_resistance(zone, daily_bars)]
-    return _merge_nearby_resistances(unbroken, daily_atr)
+    merged = _merge_nearby_resistances(unbroken, daily_atr)
+    return _apply_congestion_zone_filter(merged, daily_atr)
 
 
 def filter_current_daily_zones(
@@ -14,6 +15,14 @@ def filter_current_daily_zones(
     current_price: float,
 ) -> list[PriceZone]:
     return [_filter_current_zone(_copy_zone(zone), current_price) for zone in zones]
+
+
+def is_hidden_display_zone(zone: PriceZone) -> bool:
+    return "display_hidden" in zone.tags or "inner_congestion_zone" in zone.tags
+
+
+def is_congestion_zone(zone: PriceZone) -> bool:
+    return "congestion_zone" in zone.tags
 
 
 def _filter_current_zone(zone: PriceZone, current_price: float) -> PriceZone:
@@ -78,6 +87,91 @@ def _merge_nearby_resistances(zones: list[PriceZone], daily_atr: float) -> list[
     return sorted(supports + merged, key=lambda zone: (zone.level, zone.low))
 
 
+def _apply_congestion_zone_filter(zones: list[PriceZone], daily_atr: float) -> list[PriceZone]:
+    clusters = _find_congestion_clusters(zones, daily_atr)
+    if not clusters:
+        return zones
+
+    congestion_zones: list[PriceZone] = []
+    updated: list[PriceZone] = []
+    original_by_index = {idx: zone for idx, zone in enumerate(zones)}
+    rewritten_by_index: dict[int, PriceZone] = {}
+
+    for cluster_idx, cluster in enumerate(clusters):
+        members = [original_by_index[idx] for idx in cluster]
+        envelope_low = min(zone.low for zone in members)
+        envelope_high = max(zone.high for zone in members)
+        span = max(envelope_high - envelope_low, 1e-9)
+        supports = [zone for zone in members if "support" in zone.tags]
+        resistances = [zone for zone in members if "resistance" in zone.tags]
+        primary_support = _select_primary_support(supports, envelope_low)
+        primary_resistance = _select_primary_resistance(resistances, envelope_high)
+
+        congestion_level = min(
+            [zone.level for zone in members],
+            key=_level_rank,
+        )
+        congestion_score = max(zone.score for zone in members)
+        congestion_importance = max(zone.importance_score for zone in members)
+        congestion_fragility = max(zone.fragility_score for zone in members) + 1
+        congestion_tags = [
+            "congestion_zone",
+            "mixed_congestion",
+            "higher_conflict",
+            "support",
+            "resistance",
+        ]
+        if any("weekly_resistance" in zone.tags for zone in members):
+            congestion_tags.append("with_weekly_resistance")
+        congestion_zones.append(
+            PriceZone(
+                name=f"daily_congestion_{cluster_idx}",
+                timeframe="mixed" if len({zone.timeframe for zone in members}) > 1 else members[0].timeframe,
+                low=envelope_low,
+                high=envelope_high,
+                score=congestion_score,
+                level=congestion_level,
+                tags=sorted(set(congestion_tags)),
+                touches=max(zone.touches for zone in members),
+                importance_score=congestion_importance,
+                fragility_score=congestion_fragility,
+                invalidation_price=max(
+                    [
+                        value
+                        for value in (
+                            zone.invalidation_price for zone in members
+                        )
+                        if value is not None
+                    ],
+                    default=None,
+                ),
+            )
+        )
+
+        for idx in cluster:
+            zone = _copy_zone(original_by_index[idx])
+            zone.tags = sorted(set(zone.tags + ["congestion_member"]))
+            if primary_support is not None and zone.name == primary_support.name:
+                zone.tags = sorted(set(zone.tags + ["primary_congestion_support"]))
+            if primary_resistance is not None and zone.name == primary_resistance.name:
+                zone.tags = sorted(set(zone.tags + ["primary_congestion_resistance"]))
+
+            is_primary = (
+                (primary_support is not None and zone.name == primary_support.name)
+                or (primary_resistance is not None and zone.name == primary_resistance.name)
+            )
+            near_lower_edge = (zone.low - envelope_low) <= span * 0.12
+            near_upper_edge = (envelope_high - zone.high) <= span * 0.12
+            if not is_primary and not near_lower_edge and not near_upper_edge:
+                zone.tags = sorted(set(zone.tags + ["inner_congestion_zone", "display_hidden"]))
+            rewritten_by_index[idx] = zone
+
+    for idx, zone in enumerate(zones):
+        updated.append(rewritten_by_index.get(idx, zone))
+
+    return sorted(updated + congestion_zones, key=lambda zone: (zone.level, zone.low))
+
+
 def _merge_resistance(left: PriceZone, right: PriceZone) -> PriceZone:
     best_level = _best_level(left.level, right.level)
     invalidation_candidates = [
@@ -95,6 +189,102 @@ def _merge_resistance(left: PriceZone, right: PriceZone) -> PriceZone:
         importance_score=max(left.importance_score, right.importance_score),
         fragility_score=max(left.fragility_score, right.fragility_score),
         invalidation_price=max(invalidation_candidates) if invalidation_candidates else None,
+    )
+
+
+def _find_congestion_clusters(zones: list[PriceZone], daily_atr: float) -> list[list[int]]:
+    indexed = [
+        (idx, zone)
+        for idx, zone in enumerate(zones)
+        if zone.level in {ZoneLevel.A, ZoneLevel.B, ZoneLevel.C}
+        and ("support" in zone.tags or "resistance" in zone.tags)
+    ]
+    if len(indexed) < 3:
+        return []
+
+    proximity_gap = max(daily_atr * 0.35, 0.0)
+    adjacency: dict[int, set[int]] = {idx: set() for idx, _ in indexed}
+    for left_idx, left_zone in indexed:
+        for right_idx, right_zone in indexed:
+            if left_idx >= right_idx:
+                continue
+            if _zones_are_clustered(left_zone, right_zone, proximity_gap):
+                adjacency[left_idx].add(right_idx)
+                adjacency[right_idx].add(left_idx)
+
+    clusters: list[list[int]] = []
+    visited: set[int] = set()
+    for idx, _ in indexed:
+        if idx in visited:
+            continue
+        stack = [idx]
+        component: list[int] = []
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component.append(current)
+            stack.extend(adjacency[current] - visited)
+        if _qualifies_as_congestion(component, zones, daily_atr):
+            clusters.append(sorted(component, key=lambda item: zones[item].low))
+    return clusters
+
+
+def _zones_are_clustered(left: PriceZone, right: PriceZone, proximity_gap: float) -> bool:
+    if left.overlaps(right):
+        return True
+    return min(abs(right.low - left.high), abs(left.low - right.high)) <= proximity_gap
+
+
+def _qualifies_as_congestion(cluster: list[int], zones: list[PriceZone], daily_atr: float) -> bool:
+    if len(cluster) < 3:
+        return False
+    members = [zones[idx] for idx in cluster]
+    supports = [zone for zone in members if "support" in zone.tags]
+    resistances = [zone for zone in members if "resistance" in zone.tags]
+    if not supports or not resistances:
+        return False
+
+    overlap_pairs = 0
+    for support in supports:
+        for resistance in resistances:
+            if support.overlaps(resistance):
+                overlap_pairs += 1
+    if overlap_pairs == 0:
+        return False
+
+    span = max(zone.high for zone in members) - min(zone.low for zone in members)
+    reference_price = max((zone.low + zone.high) / 2 for zone in members)
+    max_span = max(daily_atr * 8, reference_price * 0.18)
+    return span <= max_span
+
+
+def _select_primary_support(supports: list[PriceZone], envelope_low: float) -> PriceZone | None:
+    if not supports:
+        return None
+    return min(
+        supports,
+        key=lambda zone: (
+            abs(zone.low - envelope_low),
+            _level_rank(zone.level),
+            -zone.score,
+            -zone.importance_score,
+        ),
+    )
+
+
+def _select_primary_resistance(resistances: list[PriceZone], envelope_high: float) -> PriceZone | None:
+    if not resistances:
+        return None
+    return min(
+        resistances,
+        key=lambda zone: (
+            abs(envelope_high - zone.high),
+            _level_rank(zone.level),
+            -zone.score,
+            -zone.importance_score,
+        ),
     )
 
 

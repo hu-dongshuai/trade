@@ -1,0 +1,264 @@
+[
+  {
+    "alert_id": "002241:2026-06-25T09:56:48.757532+08:00:reduce",
+    "symbol": "002241",
+    "action": "reduce",
+    "alert_ts": "2026-06-25T09:56:48.757532+08:00",
+    "price": 24.1,
+    "score": 5,
+    "reasons": [
+      "出现第三根危险上影线，但尚未出现破位确认"
+    ],
+    "symbol_name": "002241",
+    "review_window_days": 5,
+    "review_status": "hit",
+    "reviewed_at": "2026-07-02T00:00:00",
+    "drawdown_pct": 11.950207468879679,
+    "runup_pct": 0.0
+  },
+  {
+    "alert_id": "300014:2026-06-25T14:26:00.929802+08:00:exit_all",
+    "symbol": "300014",
+    "action": "exit_all",
+    "alert_ts": "2026-06-25T14:26:00.929802+08:00",
+    "price": 66.51,
+    "score": 9,
+    "reasons": [
+      "出现第三根危险上影线",
+      "15分钟上升趋势线跌破且未快速收回"
+    ],
+    "symbol_name": "300014",
+    "review_window_days": 5,
+    "review_status": "hit",
+    "reviewed_at": "2026-07-02T00:00:00",
+    "drawdown_pct": 9.00616448654338,
+    "runup_pct": 1.5336039693279144
+  },
+  {
+    "alert_id": "002241:2026-06-26T10:06:05.764119+08:00:reduce",
+    "symbol": "002241",
+    "action": "reduce",
+    "alert_ts": "2026-06-26T10:06:05.764119+08:00",
+    "price": 22.87,
+    "score": 7,
+    "reasons": [
+      "出现第三根危险上影线，但尚未出现破位确认"
+    ],
+    "symbol_name": "002241",
+    "review_window_days": 5,
+    "review_status": "hit",
+    "reviewed_at": "2026-07-03T00:00:00",
+    "drawdown_pct": 7.214691735898566,
+    "runup_pct": 0.0
+  },
+  {
+    "alert_id": "002241:2026-06-29T09:56:36.700965+08:00:exit_all",
+    "symbol": "002241",
+    "action": "exit_all",
+    "alert_ts": "2026-06-29T09:56:36.700965+08:00",
+    "price": 21.81,
+    "score": 8,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "出现向下缺口且短期未回补",
+      "11:00 这根15分钟K线确认开盘前20分钟放量杀跌且未收回",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"
+    ],
+    "symbol_name": "歌尔股份",
+    "review_window_days": 5,
+    "review_status": "watch",
+    "reviewed_at": "2026-07-06T00:00:00",
+    "drawdown_pct": 1.788170563961472,
+    "runup_pct": 3.988995873452549
+  },
+  {
+    "alert_id": "300014:2026-06-29T09:56:36.700965+08:00:exit_all",
+    "symbol": "300014",
+    "action": "exit_all",
+    "alert_ts": "2026-06-29T09:56:36.700965+08:00",
+    "price": 62.61,
+    "score": 6,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "11:00 这根15分钟K线确认开盘前20分钟放量杀跌且未收回",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"
+    ],
+    "symbol_name": "亿纬锂能",
+    "review_window_days": 5,
+    "review_status": "watch",
+    "reviewed_at": "2026-07-06T00:00:00",
+    "drawdown_pct": 5.382526752914866,
+    "runup_pct": 4.567960389714102
+  },
+  {
+    "alert_id": "002241:2026-06-29T11:10:54.275370+08:00:exit_all",
+    "symbol": "002241",
+    "action": "exit_all",
+    "alert_ts": "2026-06-29T11:10:54.275370+08:00",
+    "price": 21.61,
+    "score": 9,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "出现向下缺口且短期未回补",
+      "11:00 这根15分钟K线确认开盘前20分钟放量杀跌且未收回",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方",
+      "大盘同步转弱"
+    ],
+    "symbol_name": "歌尔股份",
+    "review_window_days": 5,
+    "review_status": "watch",
+    "reviewed_at": "2026-07-06T00:00:00",
+    "drawdown_pct": 0.8792225821378886,
+    "runup_pct": 4.951411383618696
+  },
+  {
+    "alert_id": "002241:2026-06-29T13:25:45.619714+08:00:exit_all",
+    "symbol": "002241",
+    "action": "exit_all",
+    "alert_ts": "2026-06-29T13:25:45.619714+08:00",
+    "price": 21.32,
+    "score": 9,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "出现向下缺口且短期未回补",
+      "11:00 这根15分钟K线确认开盘前20分钟放量杀跌且未收回",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方",
+      "大盘同步转弱"
+    ],
+    "symbol_name": "歌尔股份",
+    "review_window_days": 5,
+    "review_status": "watch",
+    "reviewed_at": "2026-07-06T00:00:00",
+    "drawdown_pct": 0.0,
+    "runup_pct": 6.378986866791742
+  },
+  {
+    "alert_id": "002241:2026-06-29T14:16:07.590993+08:00:exit_all",
+    "symbol": "002241",
+    "action": "exit_all",
+    "alert_ts": "2026-06-29T14:16:07.590993+08:00",
+    "price": 21.5,
+    "score": 8,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "出现向下缺口且短期未回补",
+      "11:00 这根15分钟K线确认开盘前20分钟放量杀跌且未收回",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"
+    ],
+    "symbol_name": "歌尔股份",
+    "review_window_days": 5,
+    "review_status": "watch",
+    "reviewed_at": "2026-07-06T00:00:00",
+    "drawdown_pct": 0.37209302325580607,
+    "runup_pct": 5.488372093023255
+  },
+  {
+    "alert_id": "300014:2026-06-29T14:16:07.590993+08:00:exit_all",
+    "symbol": "300014",
+    "action": "exit_all",
+    "alert_ts": "2026-06-29T14:16:07.590993+08:00",
+    "price": 64.73,
+    "score": 6,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "11:00 这根15分钟K线确认开盘前20分钟放量杀跌且未收回",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"
+    ],
+    "symbol_name": "亿纬锂能",
+    "review_window_days": 5,
+    "review_status": "hit",
+    "reviewed_at": "2026-07-06T00:00:00",
+    "drawdown_pct": 8.481384211339412,
+    "runup_pct": 1.1432102579947396
+  },
+  {
+    "alert_id": "002241:2026-07-03T09:52:36.684869+08:00:reduce",
+    "symbol": "002241",
+    "action": "reduce",
+    "alert_ts": "2026-07-03T09:52:36.684869+08:00",
+    "price": 21.98,
+    "score": 4,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"
+    ],
+    "symbol_name": "002241",
+    "review_window_days": 5,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "drawdown_pct": null,
+    "runup_pct": null
+  },
+  {
+    "alert_id": "300014:2026-07-03T09:52:36.684869+08:00:reduce",
+    "symbol": "300014",
+    "action": "reduce",
+    "alert_ts": "2026-07-03T09:52:36.684869+08:00",
+    "price": 61.32,
+    "score": 4,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"
+    ],
+    "symbol_name": "300014",
+    "review_window_days": 5,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "drawdown_pct": null,
+    "runup_pct": null
+  },
+  {
+    "alert_id": "002241:2026-07-03T13:12:44.489876+08:00:reduce",
+    "symbol": "002241",
+    "action": "reduce",
+    "alert_ts": "2026-07-03T13:12:44.489876+08:00",
+    "price": 22.0,
+    "score": 4,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"
+    ],
+    "symbol_name": "002241",
+    "review_window_days": 5,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "drawdown_pct": null,
+    "runup_pct": null
+  },
+  {
+    "alert_id": "300014:2026-07-06T13:28:04.261854+08:00:reduce",
+    "symbol": "300014",
+    "action": "reduce",
+    "alert_ts": "2026-07-06T13:28:04.261854+08:00",
+    "price": 59.57,
+    "score": 4,
+    "reasons": [
+      "跌破最近一次创出新高后的回调低点",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"
+    ],
+    "symbol_name": "300014",
+    "review_window_days": 5,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "drawdown_pct": null,
+    "runup_pct": null
+  },
+  {
+    "alert_id": "002241:2026-07-07T09:41:03.936094+08:00:reduce",
+    "symbol": "002241",
+    "action": "reduce",
+    "alert_ts": "2026-07-07T09:41:03.936094+08:00",
+    "price": 21.56,
+    "score": 4,
+    "reasons": [
+      "11:00 这根15分钟K线确认开盘前20分钟放量杀跌且未收回",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"
+    ],
+    "symbol_name": "002241",
+    "review_window_days": 5,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "drawdown_pct": null,
+    "runup_pct": null
+  }
+]

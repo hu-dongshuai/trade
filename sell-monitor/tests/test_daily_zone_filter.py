@@ -92,6 +92,29 @@ class DailyZoneFilterTest(unittest.TestCase):
         self.assertEqual(ZoneLevel.C, filtered[1].level)
         self.assertEqual(ZoneLevel.C, filtered[2].level)
 
+    def test_marks_dense_mixed_band_as_congestion_and_hides_inner_zones(self) -> None:
+        resistance = PriceZone("resistance_a", "1d", 65.8, 75.8, 8, ZoneLevel.A, ["resistance"], 8, 9, 5)
+        support_lower = PriceZone("support_b1", "1d", 65.9, 67.6, 6, ZoneLevel.B, ["support"], 6, 8, 4)
+        support_middle = PriceZone("support_b2", "1d", 68.4, 70.1, 7, ZoneLevel.B, ["support"], 4, 8, 1)
+        support_upper = PriceZone("support_b3", "1d", 74.7, 76.3, 6, ZoneLevel.B, ["support"], 4, 7, 1)
+
+        filtered = prepare_daily_zones(
+            [resistance, support_lower, support_middle, support_upper],
+            _daily_bars([64, 66, 68, 70, 72, 74]),
+            daily_atr=2.0,
+        )
+
+        congestion = next(zone for zone in filtered if "congestion_zone" in zone.tags)
+        self.assertAlmostEqual(65.8, congestion.low)
+        self.assertAlmostEqual(76.3, congestion.high)
+        lower = next(zone for zone in filtered if zone.name == "support_b1")
+        middle = next(zone for zone in filtered if zone.name == "support_b2")
+        upper = next(zone for zone in filtered if zone.name == "support_b3")
+        self.assertIn("primary_congestion_support", lower.tags)
+        self.assertIn("inner_congestion_zone", middle.tags)
+        self.assertIn("display_hidden", middle.tags)
+        self.assertNotIn("display_hidden", upper.tags)
+
 
 if __name__ == "__main__":
     unittest.main()
