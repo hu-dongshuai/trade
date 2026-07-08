@@ -89,6 +89,10 @@ def run_intraday_monitor(daily_context: DailyContext, daily_bars, m15_bars) -> l
     if m60_bearish:
         signals.append(m60_bearish)
 
+    next_day_confirmation = detect_next_day_tail_break_confirmation(m15_bars)
+    if next_day_confirmation:
+        signals.append(next_day_confirmation)
+
     signals.extend(detect_volume_price_anomaly(m15_bars, daily_bars))
 
     if daily_context.market_state == "down":
@@ -147,3 +151,65 @@ def detect_m15_ma20_high_volume_break(m15_bars: list[Bar]) -> Signal | None:
             trigger_price=last.close,
         )
     return None
+
+
+def detect_next_day_tail_break_confirmation(m15_bars: list[Bar]) -> Signal | None:
+    if len(m15_bars) < 40:
+        return None
+
+    current_day = m15_bars[-1].ts.date()
+    current_day_bars = [bar for bar in m15_bars if bar.ts.date() == current_day]
+    if len(current_day_bars) < 4:
+        return None
+
+    previous_days = []
+    for bar in reversed(m15_bars):
+        bar_day = bar.ts.date()
+        if bar_day == current_day:
+            continue
+        if not previous_days or previous_days[-1] != bar_day:
+            previous_days.append(bar_day)
+        if len(previous_days) == 1:
+            break
+    if not previous_days:
+        return None
+
+    previous_day = previous_days[0]
+    previous_day_bars = [bar for bar in m15_bars if bar.ts.date() == previous_day]
+    if len(previous_day_bars) < 16:
+        return None
+
+    historical_until_previous_close = [bar for bar in m15_bars if bar.ts.date() <= previous_day]
+    tail_resonance_count = 0
+    if detect_structure_break(historical_until_previous_close):
+        tail_resonance_count += 1
+    if detect_m15_ma20_high_volume_break(historical_until_previous_close):
+        tail_resonance_count += 1
+    if detect_m60_bearish_confirmation(historical_until_previous_close):
+        tail_resonance_count += 1
+    if tail_resonance_count < 2:
+        return None
+
+    first_hour_bars = current_day_bars[:4]
+    first_hour_close = first_hour_bars[-1].close
+    first_hour_high = max(bar.high for bar in first_hour_bars)
+    first_hour_low = min(bar.low for bar in first_hour_bars)
+    previous_tail_bar = previous_day_bars[-1]
+    ma20 = closing_ma(m15_bars[: len(historical_until_previous_close) + 4], 20)
+    if ma20 <= 0:
+        return None
+
+    failed_reclaim = first_hour_high < previous_tail_bar.close
+    stays_below_ma20 = first_hour_close < ma20
+    renews_breakdown = first_hour_low <= previous_tail_bar.low or first_hour_close < previous_tail_bar.low
+    if not (stays_below_ma20 and (failed_reclaim or renews_breakdown)):
+        return None
+
+    return Signal(
+        "next_day_tail_break_confirmation",
+        2,
+        True,
+        f"{first_hour_bars[-1].ts:%H:%M} 次日确认昨日 15:00 尾盘共振破位：首小时未能收复昨日尾盘收盘位，且继续运行在 15 分钟 MA20 下方",
+        triggered_at=first_hour_bars[-1].ts,
+        trigger_price=first_hour_close,
+    )

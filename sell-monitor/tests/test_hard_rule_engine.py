@@ -68,6 +68,24 @@ class HardRuleEngineTest(unittest.TestCase):
         self.assertEqual(Action.EXIT_ALL, decision.action)
         self.assertEqual(7, decision.total_score)
 
+    def test_third_upper_wick_tail_cluster_waits_for_next_day_confirmation(self) -> None:
+        decision = evaluate_hard_rules(
+            symbol="002241",
+            current_price=25.0,
+            position=Position("002241", 20.0, 100),
+            rule=None,
+            signals=[
+                Signal("third_dangerous_upper_wick", 3, True, "出现第三根危险上影线", triggered_at=datetime(2026, 6, 5, 14, 0)),
+                Signal("structure_break", 2, True, "structure break", triggered_at=datetime(2026, 6, 5, 15, 0)),
+                Signal("m15_ma20_high_volume_break", 2, True, "ma20 break", triggered_at=datetime(2026, 6, 5, 15, 0)),
+                Signal("m60_bearish_confirmation", 2, True, "m60 weak", triggered_at=datetime(2026, 6, 5, 15, 0)),
+            ],
+        )
+
+        self.assertIsNotNone(decision)
+        self.assertEqual(Action.REDUCE, decision.action)
+        self.assertIn("次日首小时", "".join(decision.reasons))
+
     def test_manual_stop_loss_does_not_invent_score(self) -> None:
         decision = evaluate_hard_rules(
             symbol="002241",

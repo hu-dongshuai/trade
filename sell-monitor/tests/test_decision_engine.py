@@ -36,6 +36,36 @@ class DecisionEngineTest(unittest.TestCase):
         self.assertEqual(decision.action, Action.EXIT_ALL)
         self.assertEqual(decision.current_price, 24.56)
 
+    def test_tail_end_resonance_waits_for_next_day_confirmation(self) -> None:
+        decision = build_decision(
+            "TEST",
+            9,
+            [
+                Signal("third_dangerous_upper_wick", 3, True, "third wick", triggered_at=datetime(2026, 6, 5, 14, 0)),
+                Signal("structure_break", 2, True, "structure break", triggered_at=datetime(2026, 6, 5, 15, 0)),
+                Signal("m15_ma20_high_volume_break", 2, True, "ma20 break", triggered_at=datetime(2026, 6, 5, 15, 0)),
+                Signal("m60_bearish_confirmation", 2, True, "m60 weak", triggered_at=datetime(2026, 6, 5, 15, 0)),
+            ],
+            current_price=24.56,
+        )
+        self.assertEqual(decision.action, Action.REDUCE)
+        self.assertIn("次日首小时", "".join(decision.reasons))
+
+    def test_next_day_confirmation_restores_exit_all(self) -> None:
+        decision = build_decision(
+            "TEST",
+            11,
+            [
+                Signal("third_dangerous_upper_wick", 3, True, "third wick", triggered_at=datetime(2026, 6, 5, 14, 0)),
+                Signal("structure_break", 2, True, "structure break", triggered_at=datetime(2026, 6, 5, 15, 0)),
+                Signal("m15_ma20_high_volume_break", 2, True, "ma20 break", triggered_at=datetime(2026, 6, 5, 15, 0)),
+                Signal("m60_bearish_confirmation", 2, True, "m60 weak", triggered_at=datetime(2026, 6, 5, 15, 0)),
+                Signal("next_day_tail_break_confirmation", 2, True, "next day weak", triggered_at=datetime(2026, 6, 6, 10, 15)),
+            ],
+            current_price=24.2,
+        )
+        self.assertEqual(decision.action, Action.EXIT_ALL)
+
     def test_exit_downgrades_to_reduce_when_only_one_confirmation_dimension_exists(self) -> None:
         decision = build_decision(
             "TEST",

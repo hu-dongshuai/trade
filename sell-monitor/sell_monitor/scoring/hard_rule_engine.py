@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from sell_monitor.domain.enums import Action, Priority
 from sell_monitor.domain.models import Decision, Position, Signal, UserRule
+from sell_monitor.scoring.confirmation_utils import (
+    THIRD_WICK_CONFIRMATION_GROUPS,
+    confirmation_count,
+    flat_confirmation_names,
+    is_tail_cluster_waiting_next_day_confirmation,
+)
 from sell_monitor.scoring.score_engine import compute_score
-
-
-THIRD_WICK_CONFIRMATION_GROUPS = {
-    "structure": {"breakout_failure", "structure_break"},
-    "trendline": {"trendline_break"},
-    "momentum": {"m15_ma20_high_volume_break", "high_volume_drop_below_ma5"},
-    "higher_tf": {"m60_bearish_confirmation"},
-}
 
 
 def evaluate_hard_rules(
@@ -55,7 +53,7 @@ def evaluate_hard_rules(
         return None
 
     confirmation_signals = [
-        signal for signal in signals if signal.triggered and signal.name in _flat_confirmation_names()
+        signal for signal in signals if signal.triggered and signal.name in flat_confirmation_names(THIRD_WICK_CONFIRMATION_GROUPS)
     ]
     confirmation_count = _third_wick_confirmation_count(signals)
 
@@ -68,6 +66,19 @@ def evaluate_hard_rules(
             reasons=["出现第三根危险上影线"] + [signal.reason for signal in confirmation_signals],
             next_step="清仓；第三根危险上影线已获得两类破位确认",
             cancel_condition="价格快速收回 15 分钟 MA20 和关键价位上方，并确认是假破位",
+            symbol_name=symbol_name,
+            current_price=current_price,
+        )
+
+    if is_tail_cluster_waiting_next_day_confirmation(signals, THIRD_WICK_CONFIRMATION_GROUPS):
+        return Decision(
+            symbol=symbol,
+            action=Action.REDUCE,
+            total_score=actual_score,
+            priority=Priority.HIGH,
+            reasons=["出现第三根危险上影线"] + [signal.reason for signal in confirmation_signals] + ["15:00 尾盘共振破位先按减仓处理，等待次日首小时继续转弱再升级为清仓"],
+            next_step="先减仓 50%；次日首小时若仍无法收复昨日尾盘破位位点并继续走弱，再执行清仓",
+            cancel_condition="次日首小时重新收复昨日尾盘破位K线收盘价或重新站回 15 分钟 MA20 上方",
             symbol_name=symbol_name,
             current_price=current_price,
         )
@@ -99,12 +110,4 @@ def evaluate_hard_rules(
 
 
 def _third_wick_confirmation_count(signals: list[Signal]) -> int:
-    names = {signal.name for signal in signals if signal.triggered}
-    return sum(1 for members in THIRD_WICK_CONFIRMATION_GROUPS.values() if names & members)
-
-
-def _flat_confirmation_names() -> set[str]:
-    merged: set[str] = set()
-    for members in THIRD_WICK_CONFIRMATION_GROUPS.values():
-        merged.update(members)
-    return merged
+    return confirmation_count(signals, THIRD_WICK_CONFIRMATION_GROUPS)

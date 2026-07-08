@@ -2,27 +2,16 @@ from __future__ import annotations
 
 from sell_monitor.domain.enums import Action, Priority
 from sell_monitor.domain.models import Decision, Signal
+from sell_monitor.scoring.confirmation_utils import (
+    EXIT_CONFIRMATION_GROUPS,
+    confirmation_count,
+    is_tail_cluster_waiting_next_day_confirmation,
+)
 
 
-BACKGROUND_SIGNAL_NAMES = {
-    "market_weakness",
-    "a_level_zone",
-    "sell_warning_state",
-}
+BACKGROUND_SIGNAL_NAMES = {"market_weakness", "a_level_zone", "sell_warning_state"}
 
-AUXILIARY_SIGNAL_NAMES = {
-    "rsi_bearish_divergence",
-    "volume_price_anomaly",
-    "first_dangerous_upper_wick",
-}
-
-EXIT_CONFIRMATION_GROUPS = {
-    "structure": {"breakout_failure", "structure_break"},
-    "trendline": {"trendline_break"},
-    "momentum": {"m15_ma20_high_volume_break", "high_volume_drop_below_ma5"},
-    "exhaustion": {"resistance_liquidity_grab"},
-    "higher_tf": {"m60_bearish_confirmation"},
-}
+AUXILIARY_SIGNAL_NAMES = {"rsi_bearish_divergence", "volume_price_anomaly", "first_dangerous_upper_wick"}
 
 REDUCE_CORE_THRESHOLD = 2
 EXIT_CORE_THRESHOLD = 4
@@ -50,6 +39,18 @@ def build_decision(
                 reasons=reasons,
                 next_step="清仓卖出",
                 cancel_condition="需要后续重新站回关键价位，并重建做多结构",
+                symbol_name=symbol_name,
+                current_price=current_price,
+            )
+        if is_tail_cluster_waiting_next_day_confirmation(signals, EXIT_CONFIRMATION_GROUPS):
+            return Decision(
+                symbol=symbol,
+                action=Action.REDUCE,
+                total_score=effective_score,
+                priority=Priority.HIGH,
+                reasons=reasons + ["15:00 尾盘共振破位先按减仓处理，等待次日首小时继续转弱再升级为清仓"],
+                next_step="先减仓 50%；次日首小时若仍无法收复尾盘破位位点并继续走弱，再执行清仓",
+                cancel_condition="次日首小时重新收复昨日尾盘破位K线收盘价或重新站回 15 分钟 MA20 上方",
                 symbol_name=symbol_name,
                 current_price=current_price,
             )
@@ -107,5 +108,4 @@ def _effective_sell_score(signals: list[Signal]) -> tuple[int, int]:
 
 
 def _exit_confirmation_count(signals: list[Signal]) -> int:
-    names = {signal.name for signal in signals if signal.triggered}
-    return sum(1 for members in EXIT_CONFIRMATION_GROUPS.values() if names & members)
+    return confirmation_count(signals, EXIT_CONFIRMATION_GROUPS)
