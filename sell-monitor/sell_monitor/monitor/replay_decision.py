@@ -8,10 +8,12 @@ from sell_monitor.domain.enums import Action, Priority
 from sell_monitor.domain.models import Bar, Decision, Position, PriceZone, UserRule
 from sell_monitor.monitor.daily_context_builder import build_daily_context_from_data
 from sell_monitor.monitor.intraday_monitor import run_intraday_monitor
+from sell_monitor.monitor.sell_warning_state import with_sell_warning_state
 from sell_monitor.scoring.decision_engine import build_decision
 from sell_monitor.scoring.hard_rule_engine import evaluate_hard_rules
 from sell_monitor.scoring.hold_protection import apply_hold_protection_reference
 from sell_monitor.scoring.score_engine import compute_score
+from sell_monitor.scoring.warning_mode import cap_warning_state_action
 
 
 @dataclass(frozen=True)
@@ -42,15 +44,16 @@ def build_replay_decision(
         cache_key=None,
         notices=notices,
     )
-    if daily_context.active_zone is None:
+    daily_context = with_sell_warning_state(daily_context, m15_bars)
+    if daily_context.active_zone is None and not daily_context.sell_warning_active:
         decision = Decision(
             symbol=symbol,
             action=Action.HOLD,
             total_score=0,
             priority=Priority.NORMAL,
-            reasons=["当时未接近日线 A/B 级关键价位或 C 级压力位"],
-            next_step="继续观察，等待价格进入高优先级关键价位或 C 级压力位附近",
-            cancel_condition="若后续接近日线 A/B 级关键价位或 C 级压力位，再重新评估 15 分钟卖出信号",
+            reasons=["当时未接近日线 A/B 级关键价位或 C 级压力位，也未进入日线/60分钟转弱预警态"],
+            next_step="继续观察，等待价格进入关键价位或先进入日线/60分钟转弱预警态",
+            cancel_condition="后续接近日线关键价位，或出现两项以上日线/60分钟转弱条件",
             symbol_name=symbol_name,
             current_price=quote_price,
         )
@@ -80,6 +83,7 @@ def build_replay_decision(
             symbol_name=symbol_name,
             current_price=daily_context.current_price,
         )
+        decision = cap_warning_state_action(decision, daily_context)
         decision = apply_hold_protection_reference(decision, daily_context, daily_bars, m15_bars)
     return ReplayDecisionResult(
         decision=decision,

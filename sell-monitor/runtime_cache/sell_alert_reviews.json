@@ -260,5 +260,25 @@
     "reviewed_at": null,
     "drawdown_pct": null,
     "runup_pct": null
+  },
+  {
+    "alert_id": "300014:2026-07-07T14:14:17.697958+08:00:exit_all",
+    "symbol": "300014",
+    "action": "exit_all",
+    "alert_ts": "2026-07-07T14:14:17.697958+08:00",
+    "price": 58.36,
+    "score": 6,
+    "reasons": [
+      "11:00 这根15分钟K线确认开盘前20分钟放量杀跌且未收回",
+      "15:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方",
+      "15:00 这根15分钟K线放量滞涨或量价异常",
+      "大盘同步转弱"
+    ],
+    "symbol_name": "亿纬锂能",
+    "review_window_days": 5,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "drawdown_pct": null,
+    "runup_pct": null
   }
 ]

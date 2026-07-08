@@ -1,0 +1,317 @@
+{
+  "saved_at": "2026-07-08T14:11:35.464822",
+  "symbol": "000807",
+  "strategy_version": 5,
+  "latest_daily_ts": "2026-07-07T00:00:00",
+  "daily_trend": "down",
+  "zones": [
+    {
+      "name": "daily_support_6",
+      "timeframe": "1d",
+      "low": 25.289984,
+      "high": 25.939984,
+      "score": 8,
+      "level": "A",
+      "tags": [
+        "congestion_member",
+        "fresh_zone",
+        "primary_congestion_support",
+        "support",
+        "with_fvg",
+        "with_large_liquidity",
+        "with_liquidity",
+        "with_order_block",
+        "with_partially_filled_fvg"
+      ],
+      "touches": 2,
+      "importance_score": 9,
+      "fragility_score": 1,
+      "invalidation_price": 24.964984
+    },
+    {
+      "name": "daily_congestion_0",
+      "timeframe": "1d",
+      "low": 25.289984,
+      "high": 34.373426720000005,
+      "score": 8,
+      "level": "A",
+      "tags": [
+        "congestion_zone",
+        "higher_conflict",
+        "mixed_congestion",
+        "resistance",
+        "support"
+      ],
+      "touches": 3,
+      "importance_score": 9,
+      "fragility_score": 2,
+      "invalidation_price": 34.69842672000001
+    },
+    {
+      "name": "daily_support_7",
+      "timeframe": "1d",
+      "low": 25.9703614,
+      "high": 26.6203614,
+      "score": 8,
+      "level": "A",
+      "tags": [
+        "congestion_member",
+        "fresh_zone",
+        "support",
+        "with_fvg",
+        "with_large_liquidity",
+        "with_liquidity",
+        "with_order_block",
+        "with_partially_filled_fvg"
+      ],
+      "touches": 2,
+      "importance_score": 9,
+      "fragility_score": 1,
+      "invalidation_price": 25.645361400000002
+    },
+    {
+      "name": "daily_resistance_13+weekly_resistance_2",
+      "timeframe": "mixed",
+      "low": 35.221794079999995,
+      "high": 36.27840341333333,
+      "score": 8,
+      "level": "A",
+      "tags": [
+        "fresh_zone",
+        "higher_timeframe",
+        "merged_resistance",
+        "resistance",
+        "weekly_resistance",
+        "with_large_liquidity",
+        "with_liquidity",
+        "with_weekly_resistance"
+      ],
+      "touches": 4,
+      "importance_score": 9,
+      "fragility_score": 1,
+      "invalidation_price": 36.61425341333333
+    },
+    {
+      "name": "daily_support_8",
+      "timeframe": "1d",
+      "low": 27.33565008,
+      "high": 27.98565008,
+      "score": 5,
+      "level": "B",
+      "tags": [
+        "congestion_member",
+        "display_hidden",
+        "fresh_zone",
+        "inner_congestion_zone",
+        "support",
+        "with_large_liquidity",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 2,
+      "importance_score": 6,
+      "fragility_score": 1,
+      "invalidation_price": 27.01065008
+    },
+    {
+      "name": "daily_support_12",
+      "timeframe": "1d",
+      "low": 30.864699520000002,
+      "high": 31.51469952,
+      "score": 6,
+      "level": "B",
+      "tags": [
+        "congestion_member",
+        "display_hidden",
+        "fresh_zone",
+        "inner_congestion_zone",
+        "support",
+        "with_large_liquidity",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 3,
+      "importance_score": 7,
+      "fragility_score": 1,
+      "invalidation_price": 30.539699520000003
+    },
+    {
+      "name": "daily_resistance_10+daily_resistance_11+daily_resistance_12",
+      "timeframe": "1d",
+      "low": 31.51037756,
+      "high": 34.373426720000005,
+      "score": 5,
+      "level": "B",
+      "tags": [
+        "congestion_member",
+        "fresh_zone",
+        "merged_resistance",
+        "primary_congestion_resistance",
+        "resistance",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 3,
+      "importance_score": 6,
+      "fragility_score": 1,
+      "invalidation_price": 34.69842672000001
+    },
+    {
+      "name": "daily_support_0",
+      "timeframe": "1d",
+      "low": 17.791406585,
+      "high": 18.441406585,
+      "score": 3,
+      "level": "C",
+      "tags": [
+        "support",
+        "fresh_zone",
+        "with_order_block"
+      ],
+      "touches": 2,
+      "importance_score": 3,
+      "fragility_score": 0,
+      "invalidation_price": 17.466406585
+    },
+    {
+      "name": "daily_support_2",
+      "timeframe": "1d",
+      "low": 21.37545752,
+      "high": 22.02545752,
+      "score": 4,
+      "level": "C",
+      "tags": [
+        "support",
+        "recently_tested",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 3,
+      "importance_score": 6,
+      "fragility_score": 2,
+      "invalidation_price": 21.050457520000002
+    },
+    {
+      "name": "daily_resistance_5+daily_fib_retracement_0.382_146_196",
+      "timeframe": "1d",
+      "low": 26.94134288,
+      "high": 27.59134288,
+      "score": 4,
+      "level": "C",
+      "tags": [
+        "congestion_member",
+        "daily_fibonacci",
+        "display_hidden",
+        "fib_0.382",
+        "fresh_zone",
+        "inner_congestion_zone",
+        "merged_resistance",
+        "resistance",
+        "with_fibonacci",
+        "with_order_block"
+      ],
+      "touches": 2,
+      "importance_score": 4,
+      "fragility_score": 0,
+      "invalidation_price": 27.91634288
+    },
+    {
+      "name": "daily_support_9",
+      "timeframe": "1d",
+      "low": 28.05526072,
+      "high": 28.70526072,
+      "score": 4,
+      "level": "C",
+      "tags": [
+        "congestion_member",
+        "display_hidden",
+        "fresh_zone",
+        "inner_congestion_zone",
+        "support",
+        "with_large_liquidity",
+        "with_liquidity"
+      ],
+      "touches": 2,
+      "importance_score": 5,
+      "fragility_score": 1,
+      "invalidation_price": 27.73026072
+    },
+    {
+      "name": "daily_fib_retracement_0.5_146_196+daily_fib_extension_1.272_181_183",
+      "timeframe": "1d",
+      "low": 28.73791772,
+      "high": 29.8654,
+      "score": 3,
+      "level": "C",
+      "tags": [
+        "congestion_member",
+        "daily_fibonacci",
+        "display_hidden",
+        "fib_0.5",
+        "fib_ext_1.272",
+        "inner_congestion_zone",
+        "merged_resistance",
+        "resistance"
+      ],
+      "touches": 0,
+      "importance_score": 3,
+      "fragility_score": 0,
+      "invalidation_price": 29.8654
+    },
+    {
+      "name": "daily_support_11",
+      "timeframe": "1d",
+      "low": 30.041583239999998,
+      "high": 30.691583239999996,
+      "score": 3,
+      "level": "C",
+      "tags": [
+        "congestion_member",
+        "display_hidden",
+        "fresh_zone",
+        "inner_congestion_zone",
+        "support",
+        "with_order_block"
+      ],
+      "touches": 2,
+      "importance_score": 3,
+      "fragility_score": 0,
+      "invalidation_price": 29.71658324
+    },
+    {
+      "name": "daily_support_14",
+      "timeframe": "1d",
+      "low": 32.70315684,
+      "high": 33.353156840000004,
+      "score": 4,
+      "level": "C",
+      "tags": [
+        "congestion_member",
+        "fresh_zone",
+        "support",
+        "with_liquidity",
+        "with_order_block"
+      ],
+      "touches": 2,
+      "importance_score": 5,
+      "fragility_score": 1,
+      "invalidation_price": 32.378156839999995
+    },
+    {
+      "name": "daily_support_1",
+      "timeframe": "1d",
+      "low": 19.36146275,
+      "high": 20.01146275,
+      "score": 2,
+      "level": "D",
+      "tags": [
+        "support",
+        "fresh_zone"
+      ],
+      "touches": 2,
+      "importance_score": 2,
+      "fragility_score": 0,
+      "invalidation_price": 19.036462750000002
+    }
+  ]
+}

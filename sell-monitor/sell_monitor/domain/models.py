@@ -151,6 +151,8 @@ class DailyContext:
     market_state: str
     sector_state: str
     daily_bars: list[Bar] = field(default_factory=list)
+    sell_warning_active: bool = False
+    sell_warning_reasons: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

@@ -58,20 +58,16 @@ def main() -> int:
     user_rule_store = JsonUserRuleStore(config.user_rules_path)
     provider = build_market_data_provider(config)
 
-    channels = []
-    if config.email:
-        channels.append(EmailChannel(config.email))
-    channels.append(ConsoleChannel())
-
+    notifier = ConsoleAlertDispatcher(
+        channels=[ConsoleChannel()],
+        subject_prefix=config.email.subject_prefix if config.email else "[SellMonitor]",
+    )
+    email_channel = EmailChannel(config.email) if config.email else None
     telegram_channel = TelegramChannel(config.telegram) if config.telegram else None
     obsidian_recorder = ObsidianMonitorRunRecorder(config.obsidian_monitor) if config.obsidian_monitor else None
     alert_review_service = AlertReviewService(
         provider=provider,
         store=AlertReviewStore(config.cache_dir / "sell_alert_reviews.json"),
-    )
-    notifier = ConsoleAlertDispatcher(
-        channels=channels,
-        subject_prefix=config.email.subject_prefix if config.email else "[SellMonitor]",
     )
 
     service = SellMonitorService(
@@ -95,11 +91,28 @@ def main() -> int:
             return
         try:
             telegram_channel.send(
-                subject=f"{config.telegram.subject_prefix} 卖出提醒 {display_symbol(decision.symbol, decision.symbol_name)} score={decision.total_score}",
-                message=_format_sell_telegram_message(decision),
+                subject=(
+                    f"{config.telegram.subject_prefix} 卖出 "
+                    f"{display_symbol(decision.symbol, decision.symbol_name)} {decision.total_score}分"
+                ),
+                message=_format_sell_notification_message(decision),
             )
         except Exception as exc:
             print(f"[Telegram] {display_symbol(decision.symbol, decision.symbol_name)} 发送失败: {exc}")
+
+    def send_sell_email(decision) -> None:
+        if not email_channel or not _should_send_sell_email(decision):
+            return
+        try:
+            email_channel.send(
+                subject=(
+                    f"{config.email.subject_prefix} 卖出 "
+                    f"{display_symbol(decision.symbol, decision.symbol_name)} {decision.action.value} {decision.total_score}分"
+                ),
+                message=_format_sell_notification_message(decision),
+            )
+        except Exception as exc:
+            print(f"[Email] {display_symbol(decision.symbol, decision.symbol_name)} 发送失败: {exc}")
 
     def collect_backfilled_sell_alert(as_of_dt: datetime, decision) -> None:
         if _should_send_sell_telegram(decision):
@@ -166,6 +179,7 @@ def main() -> int:
 
     for decision in result.decisions:
         notifier.dispatch(decision)
+        send_sell_email(decision)
         send_sell_telegram(decision)
 
     close = getattr(provider, "close", None)
@@ -178,16 +192,22 @@ def _should_send_sell_telegram(decision) -> bool:
     return decision.action in {Action.REDUCE, Action.STOP_LOSS, Action.EXIT_ALL} and decision.total_score >= 5
 
 
+def _should_send_sell_email(decision) -> bool:
+    return decision.action in {Action.REDUCE, Action.STOP_LOSS, Action.EXIT_ALL}
+
+
+def _format_sell_notification_message(decision) -> str:
+    blocks = [
+        f"动作: {decision.action.value}",
+        _format_optional_line("价格", _format_decision_price(decision)),
+        f"下一步: {decision.next_step}",
+        f"理由:\n{_format_numbered_reasons(decision.reasons)}",
+    ]
+    return "\n\n".join(block for block in blocks if block)
+
+
 def _format_sell_telegram_message(decision) -> str:
-    reason_lines = "\n".join(f"- {reason}" for reason in decision.reasons[:6]) or "- 无"
-    return (
-        f"股票: {display_symbol(decision.symbol, decision.symbol_name)}\n"
-        f"类型: 卖出\n"
-        f"动作: {decision.action.value}\n"
-        f"分数: {decision.total_score}\n"
-        f"理由:\n{reason_lines}\n"
-        f"下一步: {decision.next_step}"
-    )
+    return _format_sell_notification_message(decision)
 
 
 def _send_backfill_sell_telegram_summaries(
@@ -208,7 +228,7 @@ def _send_backfill_sell_telegram_summaries(
         display = display_symbol(latest_decision.symbol, latest_decision.symbol_name)
         try:
             telegram_channel.send(
-                subject=f"{subject_prefix} 回溯补齐卖出汇总 {display} count={len(items)}",
+                subject=f"{subject_prefix} 回溯卖出 {display} {len(items)}条",
                 message=_format_backfill_sell_telegram_summary(display, items),
             )
         except Exception as exc:
@@ -222,22 +242,25 @@ def _format_backfill_sell_telegram_summary(
     first_ts = items[0][0].strftime("%Y-%m-%d %H:%M")
     last_ts = items[-1][0].strftime("%Y-%m-%d %H:%M")
     lines = [
-        f"股票: {display}",
-        "类型: 回溯补齐卖出汇总",
-        f"条数: {len(items)}",
         f"时间范围: {first_ts} - {last_ts}",
-        "明细:",
+        "",
     ]
     max_items = 8
     for as_of_dt, decision in items[:max_items]:
-        first_reason = decision.reasons[0] if decision.reasons else "无"
-        lines.append(
-            f"- {as_of_dt.strftime('%Y-%m-%d %H:%M')} {decision.action.value} score={decision.total_score} "
-            f"price={_format_decision_price(decision)} reason={first_reason}"
+        lines.extend(
+            [
+                f"{as_of_dt.strftime('%Y-%m-%d %H:%M')}",
+                f"动作: {decision.action.value}",
+                f"分数: {decision.total_score}",
+                _format_optional_line("价格", _format_decision_price(decision)),
+                f"下一步: {decision.next_step}",
+                f"理由:\n{_format_numbered_reasons(decision.reasons)}",
+                "",
+            ]
         )
     if len(items) > max_items:
-        lines.append(f"- 其余 {len(items) - max_items} 条已省略")
-    return "\n".join(lines)
+        lines.append(f"其余 {len(items) - max_items} 条已省略")
+    return "\n".join(line for line in lines if line is not None).strip()
 
 
 def _format_decision_price(decision) -> str:
@@ -245,6 +268,18 @@ def _format_decision_price(decision) -> str:
     if price is None:
         return "-"
     return f"{price:.2f}"
+
+
+def _format_optional_line(label: str, value: str) -> str:
+    if not value or value == "-":
+        return ""
+    return f"{label}: {value}"
+
+
+def _format_numbered_reasons(reasons: list[str]) -> str:
+    if not reasons:
+        return "1. 无"
+    return "\n".join(f"{idx}. {reason}" for idx, reason in enumerate(reasons, start=1))
 
 
 if __name__ == "__main__":

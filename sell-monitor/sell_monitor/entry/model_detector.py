@@ -363,7 +363,7 @@ def _is_near_zone(price: float, zone: PriceZone) -> bool:
     if zone.contains(price):
         return True
     gap = min(abs(price - zone.low), abs(price - zone.high))
-    return gap / max(price, 0.01) <= 0.03
+    return gap / max(price, 0.01) <= 0.04
 
 
 def _has_bullish_reclaim(m15_bars: list[Bar]) -> bool:
@@ -375,13 +375,28 @@ def _has_bullish_reclaim(m15_bars: list[Bar]) -> bool:
     avg_volume = sum(bar.volume for bar in recent) / len(recent)
     upper_wick_ratio = last.upper_wick / max(last.range, 0.01)
     bearish_count = sum(1 for bar in m15_bars[-4:-1] if bar.is_bearish and bar.volume > avg_volume * 1.2)
-    return (
+    consecutive_heavy_bearish = any(
+        left.is_bearish
+        and right.is_bearish
+        and left.volume > avg_volume * 1.1
+        and right.volume > avg_volume * 1.1
+        for left, right in zip(m15_bars[-4:-2], m15_bars[-3:-1])
+    )
+    strong_reclaim = (
         last.is_bullish
         and last.close > prev.high
         and last.volume >= avg_volume * 1.3
         and upper_wick_ratio <= 0.35
         and bearish_count < 2
     )
+    normal_reclaim = (
+        last.is_bullish
+        and last.close >= max(prev.open, prev.close)
+        and last.volume >= avg_volume * 1.15
+        and upper_wick_ratio <= 0.40
+        and not consecutive_heavy_bearish
+    )
+    return strong_reclaim or normal_reclaim
 
 
 def _pullback_volume_is_healthy(m15_bars: list[Bar]) -> bool:
@@ -418,26 +433,38 @@ def _is_true_breakout(m15_bars: list[Bar]) -> bool:
     upper_wick_ratio = last.upper_wick / max(last.range, 0.01)
     return (
         last.close > prior_high
-        and last.body >= last.range * 0.6
-        and last.volume >= avg_volume * 1.5
-        and upper_wick_ratio <= 0.25
+        and last.body >= last.range * 0.5
+        and last.volume >= avg_volume * 1.3
+        and upper_wick_ratio <= 0.35
         and prev.close >= prev.open
     )
 
 
 def _is_first_pullback_holding(m15_bars: list[Bar]) -> bool:
-    if len(m15_bars) < 5:
+    if len(m15_bars) < 6:
         return False
     breakout_bar = m15_bars[-2]
     last = m15_bars[-1]
+    recent = m15_bars[-3:]
     avg_volume = sum(bar.volume for bar in m15_bars[-11:-1]) / min(len(m15_bars[-11:-1]), 10)
-    return (
+    strict_holding = (
         last.low >= breakout_bar.open
         and last.close >= breakout_bar.close * 0.995
         and last.low >= breakout_bar.low
         and last.volume <= breakout_bar.volume * 0.9
         and breakout_bar.volume >= avg_volume * 1.2
     )
+    breakout_seed = recent[0]
+    follow_bars = recent[1:]
+    staged_holding = (
+        breakout_seed.is_bullish
+        and breakout_seed.close > breakout_seed.open
+        and breakout_seed.volume >= avg_volume * 1.2
+        and min(bar.low for bar in follow_bars) >= breakout_seed.open * 0.995
+        and follow_bars[-1].close >= breakout_seed.close * 0.99
+        and sum(bar.volume for bar in follow_bars) / len(follow_bars) <= breakout_seed.volume * 0.95
+    )
+    return strict_holding or staged_holding
 
 
 def _is_high_quality_c_support(zone: PriceZone) -> bool:
@@ -470,7 +497,7 @@ def _resistance_too_close(
     downside = entry_price - support_low
     if downside <= 0:
         return True
-    return upside / downside < 2.3
+    return upside / downside < 1.8
 
 
 def _apply_multi_timeframe_gate(
@@ -487,9 +514,9 @@ def _apply_multi_timeframe_gate(
     else:
         hard_blocking_reasons.append("周线背景为C类：更接近高位压力或周线走弱，不按吸筹开仓处理")
 
-    if require_accumulation and context.accumulation_score <= 3:
+    if require_accumulation and context.accumulation_score <= 2:
         hard_blocking_reasons.append("多周期洗盘吸筹辅助分过低，当前更像普通弱势回调")
-    elif require_accumulation and context.accumulation_score <= 6:
+    elif require_accumulation and context.accumulation_score <= 5:
         blocking_reasons.append("多周期洗盘吸筹结构仅为中性，需等待更强承接后再评估")
 
 

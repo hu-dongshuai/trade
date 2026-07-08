@@ -16,6 +16,7 @@ class EntryScanService:
 
     def run(self, symbol_filter: str | None = None) -> EntryScanRunResult:
         symbols = self.watchlist_store.load()
+        symbol_name_map = self.watchlist_store.load_name_map()
         notices: list[str] = []
         decisions: list[EntryDecision] = []
         zone_snapshots = {}
@@ -29,7 +30,7 @@ class EntryScanService:
             symbols = [symbol for symbol in symbols if symbol == symbol_filter]
 
         for symbol in symbols:
-            symbol_name = getattr(self.data_provider, "get_symbol_name", lambda s: s)(symbol)
+            symbol_name = symbol_name_map.get(symbol) or getattr(self.data_provider, "get_symbol_name", lambda s: s)(symbol)
             try:
                 daily_context = build_daily_context(self.data_provider, symbol)
                 daily_bars = self.data_provider.get_daily_bars(symbol, limit=200)

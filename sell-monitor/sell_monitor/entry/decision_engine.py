@@ -9,15 +9,25 @@ STANDARD_ALLOW_THRESHOLD = 5
 STANDARD_WATCH_THRESHOLD = 5
 STANDARD_MIN_RR = 1.5
 
+PROBE_ENTRY_ALLOW_THRESHOLD = 4
+PROBE_ENTRY_MIN_RR = 1.5
+
 T_REENTRY_ALLOW_THRESHOLD = 5
 T_REENTRY_WATCH_THRESHOLD = 4
 T_REENTRY_MIN_RR = 1.5
 
 ROUTE_STANDARD = "standard_entry"
+ROUTE_PROBE = "probe_entry"
 ROUTE_T_REENTRY = "t_reentry"
 ROUTE_REJECT = "reject_reentry"
 
+PROBE_ENTRY_SUPPORTED_MODELS = {"pullback_buy", "order_block_buy"}
 T_REENTRY_SUPPORTED_MODELS = {"pullback_buy", "order_block_buy"}
+PROBE_ENTRY_RELAXABLE_BLOCK_MARKERS = (
+    "15分钟尚未出现明确承接确认",
+    "小周期未给出明确承接确认",
+    "上方压力过近",
+)
 T_REENTRY_RELAXABLE_BLOCK_MARKERS = (
     "15分钟尚未出现明确承接确认",
     "小周期未给出明确承接确认",
@@ -115,6 +125,28 @@ def build_entry_decision(context: EntryContext, candidates: list[EntryCandidate]
             current_price=context.current_price,
         )
 
+    probe_eval = _evaluate_probe_entry(context, best, score, missing_plan)
+    if probe_eval["allowed"]:
+        reasons = list(dict.fromkeys(base_reasons + probe_eval["reasons"]))
+        blocks = list(dict.fromkeys(combined_blocking + probe_eval["warnings"]))
+        return EntryDecision(
+            symbol=context.symbol,
+            symbol_name=context.symbol_name,
+            action=EntryAction.ALLOW_ENTRY,
+            allowed=True,
+            entry_score=probe_eval["score"],
+            entry_route=ROUTE_PROBE,
+            entry_model=best.model,
+            planned_entry_price=best.planned_entry_price,
+            stop_loss_price=best.stop_loss_price,
+            first_take_profit_price=best.first_take_profit_price,
+            risk_reward_ratio=best.risk_reward_ratio,
+            reasons=reasons,
+            blocking_reasons=blocks,
+            next_step="允许轻仓试错开仓，只使用计划仓位的 1/3 到 1/2；若15分钟再次转弱或跌破止损位，立即撤退。",
+            current_price=context.current_price,
+        )
+
     if score >= STANDARD_WATCH_THRESHOLD and not hard_blocking_reasons:
         action = EntryAction.WATCH_ENTRY
         route = ROUTE_STANDARD
@@ -150,6 +182,83 @@ def build_entry_decision(context: EntryContext, candidates: list[EntryCandidate]
         next_step=next_step,
         current_price=context.current_price,
     )
+
+
+def _evaluate_probe_entry(
+    context: EntryContext,
+    candidate: EntryCandidate,
+    base_score: int,
+    missing_plan: bool,
+) -> dict[str, object]:
+    reasons: list[str] = []
+    warnings: list[str] = []
+    blocking: list[str] = []
+    score = min(base_score, 10)
+
+    if candidate.model not in PROBE_ENTRY_SUPPORTED_MODELS:
+        blocking.append("轻仓试错只适用于回踩型或订单块承接型，不适用于追涨突破。")
+
+    support_zone = candidate.support_zone
+    if support_zone is None:
+        blocking.append("轻仓试错也必须依托明确的支撑区、需求区或订单块。")
+    elif support_zone.level not in {ZoneLevel.A, ZoneLevel.B}:
+        blocking.append("轻仓试错只接受日线 A/B 级支撑或需求区。")
+    elif support_zone.fragility_score >= 2 or "many_touches" in support_zone.tags:
+        blocking.append("轻仓试错依托的支撑区已经被明显消耗。")
+    else:
+        reasons.append(
+            f"允许围绕日线 {support_zone.level.value} 级支撑/需求区 {support_zone.low:.2f}-{support_zone.high:.2f} 轻仓试错。"
+        )
+
+    if missing_plan:
+        blocking.append("轻仓试错也必须能明确给出止损位和第一止盈位。")
+
+    rr = candidate.risk_reward_ratio
+    if rr is None:
+        blocking.append("轻仓试错缺少可计算的盈亏比。")
+    elif rr < PROBE_ENTRY_MIN_RR:
+        blocking.append("轻仓试错要求盈亏比至少 1.5:1。")
+
+    if not context.is_trend_healthy:
+        blocking.append("日线趋势已转弱，不做轻仓试错开仓。")
+    if not context.is_m60_trend_healthy:
+        blocking.append("60分钟结构未保持抬升，不做轻仓试错开仓。")
+    if context.market_state == "down":
+        blocking.append("大盘同步转弱，暂停轻仓试错。")
+    if context.sector_state == "weak":
+        blocking.append("板块偏弱，暂不做轻仓试错。")
+    if not context.liquidity_ok:
+        blocking.append("流动性不足，不适合轻仓试错。")
+    if context.weekly_background == "C":
+        blocking.append("周线背景为 C，轻仓试错也不放行。")
+
+    relaxable_blocks: list[str] = []
+    for item in candidate.hard_blocking_reasons:
+        if _is_relaxable_for_probe(item):
+            relaxable_blocks.append(item)
+        else:
+            blocking.append(item)
+
+    if relaxable_blocks:
+        reasons.append("标准开仓还差最后一层确认，但允许先按轻仓试错跟踪。")
+        warnings.extend(relaxable_blocks)
+
+    for item in candidate.blocking_reasons:
+        if "当前不接近明确支撑区" in item or "当前未回到有效订单块/需求区" in item:
+            blocking.append(item)
+        elif "板块偏弱" in item:
+            blocking.append(item)
+        else:
+            warnings.append(item)
+
+    allowed = score >= PROBE_ENTRY_ALLOW_THRESHOLD and not blocking
+    return {
+        "score": score,
+        "allowed": allowed,
+        "reasons": list(dict.fromkeys(reasons)),
+        "warnings": list(dict.fromkeys(warnings)),
+        "blocking": list(dict.fromkeys(blocking)),
+    }
 
 
 def _evaluate_t_reentry(
@@ -251,6 +360,10 @@ def _evaluate_t_support_zone(
 
 def _is_relaxable_for_t(reason: str) -> bool:
     return any(marker in reason for marker in T_REENTRY_RELAXABLE_BLOCK_MARKERS)
+
+
+def _is_relaxable_for_probe(reason: str) -> bool:
+    return any(marker in reason for marker in PROBE_ENTRY_RELAXABLE_BLOCK_MARKERS)
 
 
 def _is_high_quality_c_support(zone: PriceZone) -> bool:

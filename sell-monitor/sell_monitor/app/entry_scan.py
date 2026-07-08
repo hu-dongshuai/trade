@@ -8,6 +8,7 @@ from sell_monitor.config import load_default_config
 from sell_monitor.data.provider_factory import build_market_data_provider
 from sell_monitor.domain.enums import EntryAction
 from sell_monitor.entry.entry_scan_service import EntryScanService
+from sell_monitor.notifier.channels.email import EmailChannel
 from sell_monitor.notifier.channels.entry_obsidian import ObsidianEntryRunRecorder
 from sell_monitor.notifier.channels.telegram import TelegramChannel
 from sell_monitor.notifier.entry_dispatcher import EntryAlertDispatcher, EntryConsoleChannel
@@ -53,6 +54,7 @@ def main() -> int:
     recorder = ObsidianEntryRunRecorder(config.obsidian_entry)
     dispatcher = EntryAlertDispatcher(channels=[EntryConsoleChannel()])
     telegram_channel = TelegramChannel(config.telegram) if config.telegram else None
+    email_channel = EmailChannel(config.email) if config.email else None
     service = EntryScanService(data_provider=provider, watchlist_store=watchlist_store)
 
     symbols = [args.symbol] if args.symbol else watchlist_store.load()
@@ -83,14 +85,25 @@ def main() -> int:
     )
     for decision in result.decisions:
         dispatcher.dispatch(decision)
+        if email_channel and _should_send_entry_email(decision):
+            try:
+                email_channel.send(
+                    subject=(
+                        f"{config.email.subject_prefix} 开仓 "
+                        f"{display_symbol(decision.symbol, decision.symbol_name)} allow {decision.entry_score}分"
+                    ),
+                    message=_format_entry_notification_message(decision),
+                )
+            except Exception as exc:
+                print(f"[Email] {display_symbol(decision.symbol, decision.symbol_name)} 发送失败：{exc}")
         if telegram_channel and _should_send_entry_telegram(decision):
             try:
                 telegram_channel.send(
                     subject=(
-                        f"{config.telegram.subject_prefix} 开仓提醒 "
-                        f"{display_symbol(decision.symbol, decision.symbol_name)} score={decision.entry_score}"
+                        f"{config.telegram.subject_prefix} 开仓 "
+                        f"{display_symbol(decision.symbol, decision.symbol_name)} {decision.entry_score}分"
                     ),
-                    message=_format_entry_telegram_message(decision),
+                    message=_format_entry_notification_message(decision),
                 )
             except Exception as exc:
                 print(f"[Telegram] {display_symbol(decision.symbol, decision.symbol_name)} 发送失败：{exc}")
@@ -105,26 +118,36 @@ def _should_send_entry_telegram(decision) -> bool:
     return decision.allowed and decision.action == EntryAction.ALLOW_ENTRY
 
 
+def _should_send_entry_email(decision) -> bool:
+    return decision.allowed and decision.action == EntryAction.ALLOW_ENTRY
+
+
+def _format_entry_notification_message(decision) -> str:
+    blocks = [
+        f"路线: {_route_label(decision.entry_route)} / {decision.entry_model}",
+        f"计划: {_fmt(decision.planned_entry_price)}",
+        f"止损: {_fmt(decision.stop_loss_price)}",
+        f"止盈1: {_fmt(decision.first_take_profit_price)}",
+        _format_optional_line("盈亏比", _fmt(decision.risk_reward_ratio)),
+        f"下一步: {decision.next_step}",
+        f"理由:\n{_format_numbered_reasons(decision.reasons)}",
+    ]
+    if decision.blocking_reasons:
+        blocks.append(f"注意:\n{_format_numbered_reasons(decision.blocking_reasons)}")
+    return "\n\n".join(block for block in blocks if block)
+
+
 def _format_entry_telegram_message(decision) -> str:
-    reason_lines = "\n".join(f"- {reason}" for reason in decision.reasons[:6]) or "- 无"
-    return (
-        f"股票: {display_symbol(decision.symbol, decision.symbol_name)}\n"
-        f"类型: 买入\n"
-        f"路线: {_route_label(decision.entry_route)}\n"
-        f"动作: {decision.action.value}\n"
-        f"分数: {decision.entry_score}\n"
-        f"理由:\n{reason_lines}\n"
-        f"计划挂单价: {_fmt(decision.planned_entry_price)}\n"
-        f"止损价: {_fmt(decision.stop_loss_price)}\n"
-        f"第一止盈位: {_fmt(decision.first_take_profit_price)}"
-    )
+    return _format_entry_notification_message(decision)
 
 
 def _route_label(route: str) -> str:
     if route == "standard_entry":
         return "标准开仓"
+    if route == "probe_entry":
+        return "轻仓试错"
     if route == "t_reentry":
-        return "T仓回补"
+        return "做T回补"
     return "禁止回补"
 
 
@@ -132,6 +155,18 @@ def _fmt(value: float | None) -> str:
     if value is None:
         return "-"
     return f"{value:.2f}"
+
+
+def _format_optional_line(label: str, value: str) -> str:
+    if not value or value == "-":
+        return ""
+    return f"{label}: {value}"
+
+
+def _format_numbered_reasons(reasons: list[str]) -> str:
+    if not reasons:
+        return "1. 无"
+    return "\n".join(f"{idx}. {reason}" for idx, reason in enumerate(reasons, start=1))
 
 
 if __name__ == "__main__":

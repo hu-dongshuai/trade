@@ -35,37 +35,38 @@ class HardRuleEngineTest(unittest.TestCase):
         self.assertEqual(3, decision.total_score)
         self.assertIn("尚未出现破位确认", decision.reasons[0])
 
-    def test_third_upper_wick_with_structure_break_uses_actual_signal_score(self) -> None:
+    def test_third_upper_wick_with_single_confirmation_still_only_reduces(self) -> None:
         decision = evaluate_hard_rules(
             symbol="002241",
             current_price=25.0,
             position=Position("002241", 20.0, 100),
             rule=None,
             signals=[
-                Signal(
-                    "third_dangerous_upper_wick",
-                    3,
-                    True,
-                    "出现第三根危险上影线（10:00）",
-                    triggered_at=datetime(2026, 6, 5, 10, 0),
-                    trigger_price=25.31,
-                ),
-                Signal(
-                    "structure_break",
-                    2,
-                    True,
-                    "跌破最近一次创出新高后的回调低点",
-                    triggered_at=datetime(2026, 6, 5, 10, 30),
-                    trigger_price=24.94,
-                ),
+                Signal("third_dangerous_upper_wick", 3, True, "出现第三根危险上影线（10:00）"),
+                Signal("structure_break", 2, True, "跌破最近一次创出新高后的回调低点"),
+            ],
+        )
+
+        self.assertIsNotNone(decision)
+        self.assertEqual(Action.REDUCE, decision.action)
+        self.assertIn("清仓二次确认仍不足", "；".join(decision.reasons))
+
+    def test_third_upper_wick_with_two_confirmation_dimensions_exits(self) -> None:
+        decision = evaluate_hard_rules(
+            symbol="002241",
+            current_price=25.0,
+            position=Position("002241", 20.0, 100),
+            rule=None,
+            signals=[
+                Signal("third_dangerous_upper_wick", 3, True, "出现第三根危险上影线（10:00）"),
+                Signal("structure_break", 2, True, "跌破最近一次创出新高后的回调低点"),
+                Signal("m15_ma20_high_volume_break", 2, True, "14:00 这根15分钟K线放量，且连续两根15分钟K线收在 MA20 下方"),
             ],
         )
 
         self.assertIsNotNone(decision)
         self.assertEqual(Action.EXIT_ALL, decision.action)
-        self.assertEqual(25.0, decision.current_price)
-        self.assertEqual(5, decision.total_score)
-        self.assertIn("跌破最近一次创出新高后的回调低点", decision.reasons)
+        self.assertEqual(7, decision.total_score)
 
     def test_manual_stop_loss_does_not_invent_score(self) -> None:
         decision = evaluate_hard_rules(

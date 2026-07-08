@@ -32,6 +32,8 @@ def _fmt(value: float | None) -> str:
 def _route_label(route: str) -> str:
     if route == "standard_entry":
         return "标准开仓"
+    if route == "probe_entry":
+        return "轻仓试错"
     if route == "t_reentry":
         return "T仓回补"
     return "禁止回补"

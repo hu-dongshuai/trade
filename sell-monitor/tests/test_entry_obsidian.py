@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from sell_monitor.config import ObsidianEntryConfig
-from sell_monitor.domain.enums import EntryAction
+from sell_monitor.domain.enums import EntryAction, ZoneLevel
 from sell_monitor.domain.models import Bar, EntryDecision, PriceZone
 from sell_monitor.notifier.channels.entry_obsidian import ObsidianEntryRunRecorder
 
@@ -84,6 +84,45 @@ class EntryObsidianRecorderTest(unittest.TestCase):
             self.assertIn("<tbody>", content)
             self.assertIn("2026-07-02 10:30:00", content)
             self.assertNotIn("| 检测时间 | 股票代码 |", content)
+
+    def test_writes_focus_support_and_resistance_before_chart(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            recorder = ObsidianEntryRunRecorder(ObsidianEntryConfig(monitor_dir=Path(tmp)))
+            decision = EntryDecision(
+                symbol="002241",
+                symbol_name="歌尔股份",
+                action=EntryAction.ALLOW_ENTRY,
+                allowed=True,
+                entry_score=7,
+                entry_route="standard_entry",
+                entry_model="pullback_buy",
+                planned_entry_price=24.80,
+                stop_loss_price=24.10,
+                first_take_profit_price=26.90,
+                risk_reward_ratio=2.10,
+                reasons=["test"],
+                blocking_reasons=[],
+                next_step="观察",
+                current_price=24.90,
+            )
+            zones = [
+                PriceZone(name="support", timeframe="1d", low=24.2, high=24.8, level=ZoneLevel.B, tags=["support"]),
+                PriceZone(name="resistance", timeframe="1d", low=26.1, high=26.8, level=ZoneLevel.A, tags=["resistance"]),
+            ]
+
+            recorder.write_run(
+                symbols=["002241"],
+                decisions=[decision],
+                notices=[],
+                zone_snapshots={"002241": zones},
+                daily_bar_snapshots={"002241": _daily_bars()},
+            )
+
+            content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
+            self.assertIn("当前最需要关注的支撑/压力位", content)
+            self.assertIn("支撑位：日线B级支撑区 24.20-24.80", content)
+            self.assertIn("压力位：日线A级压力区 26.10-26.80", content)
+            self.assertLess(content.index("当前最需要关注的支撑/压力位"), content.index("<img"))
 
 
 if __name__ == "__main__":

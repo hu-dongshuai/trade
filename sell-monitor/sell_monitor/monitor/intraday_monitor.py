@@ -8,6 +8,7 @@ from sell_monitor.signals.breakout_failure import detect_breakout_failure
 from sell_monitor.signals.dangerous_upper_wick import detect_dangerous_upper_wick_signals
 from sell_monitor.signals.gap_risk import detect_gap_risk
 from sell_monitor.signals.liquidity_grab import detect_resistance_liquidity_grab
+from sell_monitor.signals.m60_bearish_confirmation import detect_m60_bearish_confirmation
 from sell_monitor.signals.open_20min_risk import detect_open_20min_risk
 from sell_monitor.signals.structure_break import detect_structure_break
 from sell_monitor.signals.trendline_break import detect_trendline_break
@@ -16,35 +17,53 @@ from sell_monitor.zones.intraday_zone_detector import detect_intraday_resistance
 
 
 def run_intraday_monitor(daily_context: DailyContext, daily_bars, m15_bars) -> list[Signal]:
-    if not daily_context.active_zone:
+    warning_mode = daily_context.sell_warning_active and daily_context.active_zone is None
+    if not daily_context.active_zone and not warning_mode:
         return []
 
     signals: list[Signal] = []
     active_zone = daily_context.active_zone
-    detect_intraday_resistance_near_active_zone(m15_bars, active_zone)
-    support_only_zone = "support" in active_zone.tags and "resistance" not in active_zone.tags
+    support_only_zone = False
 
-    if not support_only_zone and has_bearish_rsi_divergence(m15_bars):
+    if warning_mode:
         last_bar = m15_bars[-1]
+        warning_reason = "已进入日线/60分钟转弱预警态：" + "；".join(daily_context.sell_warning_reasons[:2])
         signals.append(
             Signal(
-                "rsi_bearish_divergence",
+                "sell_warning_state",
                 1,
                 True,
-                "RSI 顶背离且位于关键价位附近",
+                warning_reason,
                 triggered_at=last_bar.ts,
                 trigger_price=last_bar.close,
             )
         )
 
-    if not support_only_zone:
-        signals.extend(detect_dangerous_upper_wick_signals(m15_bars, active_zone))
-        breakout_failure = detect_breakout_failure(m15_bars, active_zone)
-        if breakout_failure:
-            signals.append(breakout_failure)
-        liquidity_grab = detect_resistance_liquidity_grab(m15_bars, active_zone)
-        if liquidity_grab:
-            signals.append(liquidity_grab)
+    if active_zone is not None:
+        detect_intraday_resistance_near_active_zone(m15_bars, active_zone)
+        support_only_zone = "support" in active_zone.tags and "resistance" not in active_zone.tags
+
+        if not support_only_zone and has_bearish_rsi_divergence(m15_bars):
+            last_bar = m15_bars[-1]
+            signals.append(
+                Signal(
+                    "rsi_bearish_divergence",
+                    1,
+                    True,
+                    "RSI 顶背离且位于关键价位附近",
+                    triggered_at=last_bar.ts,
+                    trigger_price=last_bar.close,
+                )
+            )
+
+        if not support_only_zone:
+            signals.extend(detect_dangerous_upper_wick_signals(m15_bars, active_zone))
+            breakout_failure = detect_breakout_failure(m15_bars, active_zone)
+            if breakout_failure:
+                signals.append(breakout_failure)
+            liquidity_grab = detect_resistance_liquidity_grab(m15_bars, active_zone)
+            if liquidity_grab:
+                signals.append(liquidity_grab)
 
     trendline_break = detect_trendline_break(m15_bars)
     if trendline_break:
@@ -66,6 +85,10 @@ def run_intraday_monitor(daily_context: DailyContext, daily_bars, m15_bars) -> l
     if ma20_break:
         signals.append(ma20_break)
 
+    m60_bearish = detect_m60_bearish_confirmation(m15_bars)
+    if m60_bearish:
+        signals.append(m60_bearish)
+
     signals.extend(detect_volume_price_anomaly(m15_bars, daily_bars))
 
     if daily_context.market_state == "down":
@@ -81,7 +104,7 @@ def run_intraday_monitor(daily_context: DailyContext, daily_bars, m15_bars) -> l
             )
         )
 
-    if not support_only_zone and daily_context.active_zone.level.value == "A":
+    if active_zone is not None and not support_only_zone and daily_context.active_zone.level.value == "A":
         last_bar = m15_bars[-1]
         signals.append(
             Signal(

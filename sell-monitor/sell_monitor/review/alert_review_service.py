@@ -77,10 +77,7 @@ def format_review_status(record: AlertReviewRecord) -> str:
         return "待复盘"
     if record.drawdown_pct is None or record.runup_pct is None:
         return _status_label(record.review_status)
-    return (
-        f"{_status_label(record.review_status)}"
-        f"（5日涨{record.runup_pct:.2f}%/回{record.drawdown_pct:.2f}%）"
-    )
+    return f"{_status_label(record.review_status)}（5日涨{record.runup_pct:.2f}%/回撤{record.drawdown_pct:.2f}%）"
 
 
 def _status_label(review_status: str) -> str:

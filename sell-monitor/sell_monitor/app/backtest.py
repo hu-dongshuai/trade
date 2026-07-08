@@ -13,14 +13,30 @@ from sell_monitor.domain.enums import Action, Priority
 from sell_monitor.domain.models import Bar, Decision, Position, PriceZone, UserRule
 from sell_monitor.monitor.daily_context_builder import build_daily_context_from_data
 from sell_monitor.monitor.intraday_monitor import run_intraday_monitor
+from sell_monitor.monitor.sell_warning_state import with_sell_warning_state
 from sell_monitor.notifier.zone_table_formatter import format_multi_symbol_zone_tables
 from sell_monitor.scoring.decision_engine import build_decision
 from sell_monitor.scoring.hard_rule_engine import evaluate_hard_rules
 from sell_monitor.scoring.hold_protection import apply_hold_protection_reference
 from sell_monitor.scoring.score_engine import compute_score
+from sell_monitor.scoring.warning_mode import cap_warning_state_action
 from sell_monitor.storage.position_store import JsonPositionStore
 from sell_monitor.storage.user_rule_store import JsonUserRuleStore
 from sell_monitor.storage.watchlist_factory import build_watchlist_store
+
+
+REDUCE_HIT_DRAWDOWN_PCT = 5.0
+EXIT_HIT_DRAWDOWN_PCT = 7.0
+FALSE_POSITIVE_RUNUP_PCT = 7.0
+MISSED_DRAWDOWN_PCT = 7.0
+SELL_ALERT_DEDUPE_DAYS = 5
+
+OUTCOME_HIT = "命中"
+OUTCOME_FALSE_POSITIVE = "误报"
+OUTCOME_MISSED = "漏报"
+OUTCOME_COVERED = "已被前序卖点覆盖"
+OUTCOME_UNDETERMINED = "待定"
+OUTCOME_NO_TRIGGER = "未触发"
 
 
 @dataclass(frozen=True)
@@ -95,7 +111,7 @@ def run_backtest(
 ) -> BacktestResult:
     events: list[BacktestEvent] = []
     notices: list[str] = []
-    zone_snapshots = {}
+    zone_snapshots: dict[str, list[PriceZone]] = {}
     for symbol in symbols:
         symbol_name = getattr(provider, "get_symbol_name", lambda s: s)(symbol)
         try:
@@ -106,17 +122,17 @@ def run_backtest(
             continue
 
         if not daily_bars:
-            notices.append(f"[{symbol}] 没有可用日线数据，跳过")
+            notices.append(f"[{symbol}] 没有可用日线数据，已跳过。")
             continue
         if not m15_bars:
-            notices.append(f"[{symbol}] 没有可用15分钟数据，跳过")
+            notices.append(f"[{symbol}] 没有可用15分钟数据，已跳过。")
             continue
 
         earliest_m15 = m15_bars[0].ts
         if earliest_m15.date() > start_dt.date():
             notices.append(
                 f"[{symbol}] 15分钟数据最早仅到 {earliest_m15.strftime('%Y-%m-%d %H:%M:%S')}，"
-                "早于该时间的回测日期会自动跳过"
+                "早于该时间的回测日期会自动跳过。"
             )
 
         position = positions.get(symbol) or Position(symbol=symbol, cost_price=daily_bars[0].close, quantity=1)
@@ -133,6 +149,7 @@ def run_backtest(
                 notices=[],
             )
             zone_snapshots[symbol] = snapshot_context.daily_zones
+
         test_days = [bar for bar in daily_bars if start_dt.date() <= bar.ts.date() <= end_dt.date()]
         symbol_events: list[BacktestEvent] = []
         for day_bar in test_days:
@@ -144,7 +161,10 @@ def run_backtest(
             decision = _build_backtest_decision(provider, symbol, daily_until, m15_until, position, rules.get(symbol), as_of_dt)
             future_daily = [bar for bar in daily_bars if bar.ts.date() > day_bar.ts.date()]
             symbol_events.append(_build_event(symbol, symbol_name, day_bar, decision, future_daily))
-        events.extend(_adjust_missed_after_prior_sell_alerts(symbol_events))
+
+        deduped_events = _dedupe_sell_alerts(symbol_events, window_days=SELL_ALERT_DEDUPE_DAYS)
+        events.extend(_adjust_missed_after_prior_sell_alerts(deduped_events))
+
     return BacktestResult(events=events, notices=notices, zone_snapshots=zone_snapshots)
 
 
@@ -159,12 +179,14 @@ def format_backtest_report(result: BacktestResult, start_date: str, end_date: st
         f"- 清仓/止损提醒: {summary['exit_total']}，命中 {summary['exit_hit']}，误报 {summary['exit_false']}",
         f"- 漏报: {summary['missed']}",
         "",
-        "## 判定口径",
+        "## 回测规则",
         "",
-        "- 减仓命中: 触发后 15 个交易日内最大回撤 >= 7%。",
-        "- 清仓命中: 触发后 15 个交易日内最大回撤 >= 7%。",
-        "- 误报: 未达到对应回撤阈值，且触发后最大上涨 >= 7%。",
-        "- 漏报: HOLD 后 15 个交易日内最大回撤 >= 7%，且此前 15 个交易日内没有出现减仓/清仓/止损提醒。",
+        f"- 减仓命中: 触发后 15 个交易日内最大回撤 >= {REDUCE_HIT_DRAWDOWN_PCT:.0f}%。",
+        f"- 清仓命中: 触发后 15 个交易日内最大回撤 >= {EXIT_HIT_DRAWDOWN_PCT:.0f}%。",
+        f"- 误报: 未达到对应回撤阈值，且触发后最大上涨 >= {FALSE_POSITIVE_RUNUP_PCT:.0f}%。",
+        f"- 漏报: HOLD 后 15 个交易日内最大回撤 >= {MISSED_DRAWDOWN_PCT:.0f}%，且此前 15 个交易日内没有出现减仓/清仓/止损提醒。",
+        f"- 去重: 同一只股票在 {SELL_ALERT_DEDUPE_DAYS} 个交易日窗口内，只保留最高等级的卖出提醒；若等级相同，保留更早的一次。",
+        "- 评分收紧: 背景类信号最多只贡献 1 分，不能单独推动卖出动作。",
         "",
     ]
     lines.extend(format_multi_symbol_zone_tables(result.zone_snapshots or {}))
@@ -194,12 +216,12 @@ def summarize_events(events: list[BacktestEvent]) -> dict[str, int]:
     exit_events = [event for event in events if event.action in {Action.EXIT_ALL, Action.STOP_LOSS}]
     return {
         "reduce_total": len(reduce_events),
-        "reduce_hit": sum(1 for event in reduce_events if event.outcome == "命中"),
-        "reduce_false": sum(1 for event in reduce_events if event.outcome == "误报"),
+        "reduce_hit": sum(1 for event in reduce_events if event.outcome == OUTCOME_HIT),
+        "reduce_false": sum(1 for event in reduce_events if event.outcome == OUTCOME_FALSE_POSITIVE),
         "exit_total": len(exit_events),
-        "exit_hit": sum(1 for event in exit_events if event.outcome == "命中"),
-        "exit_false": sum(1 for event in exit_events if event.outcome == "误报"),
-        "missed": sum(1 for event in events if event.outcome == "漏报"),
+        "exit_hit": sum(1 for event in exit_events if event.outcome == OUTCOME_HIT),
+        "exit_false": sum(1 for event in exit_events if event.outcome == OUTCOME_FALSE_POSITIVE),
+        "missed": sum(1 for event in events if event.outcome == OUTCOME_MISSED),
     }
 
 
@@ -224,26 +246,30 @@ def _build_backtest_decision(
         cache_key=None,
         notices=[],
     )
-    if daily_context.active_zone is None:
+    daily_context = with_sell_warning_state(daily_context, m15_bars)
+    if daily_context.active_zone is None and not daily_context.sell_warning_active:
         return Decision(
             symbol=symbol,
             action=Action.HOLD,
             total_score=0,
             priority=Priority.NORMAL,
-            reasons=["当日未接近日线 A/B 级关键价位或 C 级压力位"],
+            reasons=["当日未接近日线 A/B 级关键价位或 C 级压力位，也未进入日线/60分钟转弱预警态"],
             next_step="继续观察",
-            cancel_condition="重新接近日线关键价位后再评估",
+            cancel_condition="重新接近日线关键价位，或出现两项以上日线/60分钟转弱条件后再评估",
             symbol_name=symbol_name,
             current_price=current_price,
         )
     signals = run_intraday_monitor(daily_context, daily_bars, m15_bars)
     hard = evaluate_hard_rules(symbol, current_price, position, rule, signals, symbol_name=symbol_name)
-    decision = hard or build_decision(
-        symbol,
-        compute_score(signals),
-        signals,
-        symbol_name=symbol_name,
-        current_price=current_price,
+    decision = hard or cap_warning_state_action(
+        build_decision(
+            symbol,
+            compute_score(signals),
+            signals,
+            symbol_name=symbol_name,
+            current_price=current_price,
+        ),
+        daily_context,
     )
     return apply_hold_protection_reference(decision, daily_context, daily_bars, m15_bars)
 
@@ -271,7 +297,7 @@ def _build_event(symbol: str, symbol_name: str | None, day_bar: Bar, decision: D
 def _adjust_missed_after_prior_sell_alerts(events: list[BacktestEvent]) -> list[BacktestEvent]:
     adjusted: list[BacktestEvent] = []
     for event in events:
-        if event.outcome == "漏报" and _has_prior_sell_alert(adjusted):
+        if event.outcome == OUTCOME_MISSED and _has_prior_sell_alert(adjusted):
             adjusted.append(
                 BacktestEvent(
                     symbol=event.symbol,
@@ -283,13 +309,43 @@ def _adjust_missed_after_prior_sell_alerts(events: list[BacktestEvent]) -> list[
                     price=event.price,
                     drawdown_15d=event.drawdown_15d,
                     runup_15d=event.runup_15d,
-                    outcome="已预警",
+                    outcome=OUTCOME_COVERED,
                     reason=event.reason + "; 前15个交易日内已出现减仓/清仓/止损提醒，不计为漏报",
                 )
             )
             continue
         adjusted.append(event)
     return adjusted
+
+
+def _dedupe_sell_alerts(events: list[BacktestEvent], window_days: int) -> list[BacktestEvent]:
+    deduped: list[BacktestEvent] = []
+    for event in events:
+        if event.action not in {Action.REDUCE, Action.EXIT_ALL, Action.STOP_LOSS}:
+            deduped.append(event)
+            continue
+
+        event_dt = datetime.strptime(event.as_of_date, "%Y-%m-%d")
+        if deduped and deduped[-1].action in {Action.REDUCE, Action.EXIT_ALL, Action.STOP_LOSS}:
+            previous = deduped[-1]
+            previous_dt = datetime.strptime(previous.as_of_date, "%Y-%m-%d")
+            if (event_dt - previous_dt).days < window_days:
+                if _sell_action_rank(event.action) > _sell_action_rank(previous.action):
+                    deduped[-1] = event
+                continue
+
+        deduped.append(event)
+    return deduped
+
+
+def _sell_action_rank(action: Action) -> int:
+    if action == Action.EXIT_ALL:
+        return 3
+    if action == Action.STOP_LOSS:
+        return 2
+    if action == Action.REDUCE:
+        return 1
+    return 0
 
 
 def _has_prior_sell_alert(events: list[BacktestEvent]) -> bool:
@@ -299,20 +355,20 @@ def _has_prior_sell_alert(events: list[BacktestEvent]) -> bool:
 
 def _classify_outcome(action: Action, drawdown_15d: float, runup_15d: float) -> str:
     if action == Action.REDUCE:
-        if drawdown_15d >= 7.0:
-            return "命中"
-        if runup_15d >= 7.0:
-            return "误报"
-        return "待定"
+        if drawdown_15d >= REDUCE_HIT_DRAWDOWN_PCT:
+            return OUTCOME_HIT
+        if runup_15d >= FALSE_POSITIVE_RUNUP_PCT:
+            return OUTCOME_FALSE_POSITIVE
+        return OUTCOME_UNDETERMINED
     if action in {Action.EXIT_ALL, Action.STOP_LOSS}:
-        if drawdown_15d >= 7.0:
-            return "命中"
-        if runup_15d >= 7.0:
-            return "误报"
-        return "待定"
-    if drawdown_15d >= 7.0:
-        return "漏报"
-    return "未触发"
+        if drawdown_15d >= EXIT_HIT_DRAWDOWN_PCT:
+            return OUTCOME_HIT
+        if runup_15d >= FALSE_POSITIVE_RUNUP_PCT:
+            return OUTCOME_FALSE_POSITIVE
+        return OUTCOME_UNDETERMINED
+    if drawdown_15d >= MISSED_DRAWDOWN_PCT:
+        return OUTCOME_MISSED
+    return OUTCOME_NO_TRIGGER
 
 
 def _max_drawdown_pct(price: float, future_daily: list[Bar]) -> float:

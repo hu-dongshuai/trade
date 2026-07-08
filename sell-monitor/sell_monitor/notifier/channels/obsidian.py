@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 from datetime import datetime
@@ -23,6 +23,42 @@ DAILY_TRIGGER_TITLE = "# 当日应卖出"
 DAILY_TRIGGER_TABLE_HEADER = "| 时间 | 股票代码 | 卖出动作 | 分数 | 价格 | 原因 | 建议 | 复盘 |"
 DAILY_TRIGGER_TABLE_SEPARATOR = "| --- | --- | --- | ---: | ---: | --- | --- | --- |"
 
+MOJIBAKE_MARKERS = (
+    "鐩戞帶",
+    "褰撴棩",
+    "鍗栧嚭",
+    "妫€娴",
+    "鏃堕棿",
+    "鑲＄エ",
+    "缁撹",
+    "鍔ㄤ綔",
+    "鍒嗘暟",
+    "浠锋牸",
+    "鍘熷洜",
+    "鎻愮ず",
+    "涓嬩竴姝",
+    "鍙栨秷",
+    "澶嶇洏",
+    "鏈Е鍙",
+    "姝屽皵",
+    "鍑忎粨",
+    "娓呬粨",
+    "寰呭",
+    "鏀鹃噺",
+    "璺岀牬",
+    "绗笁鏍",
+    "鍏抽敭",
+    "鏀拺",
+    "鍘嬪姏",
+    "褰撳墠",
+    "娴佸姩鎬",
+    "瑙傚療",
+    "缁х画",
+    "鏃ョ嚎",
+    "15鍒嗛挓",
+    "閻╂垶甯",
+)
+
 
 class ObsidianMarkdownChannel:
     def __init__(self, config: ObsidianMonitorConfig) -> None:
@@ -34,7 +70,7 @@ class ObsidianMarkdownChannel:
         path = self.monitor_dir / f"{symbol}.md"
         previous = path.read_text(encoding="utf-8") if path.exists() else _initial_content(symbol)
         entry = _format_entry(subject, message)
-        path.write_text(_prepend_entry(previous, entry), encoding="utf-8")
+        path.write_text(_prepend_entry(previous, entry, symbol), encoding="utf-8")
 
 
 class ObsidianMonitorRunRecorder:
@@ -67,6 +103,7 @@ class ObsidianMonitorRunRecorder:
             daily_bars = daily_bar_snapshots.get(symbol, [])
             chart_path = render_weekly_zone_chart(self.monitor_dir / "assets", safe_symbol, daily_bars, zones)
             chart_ref = f"assets/{chart_path.name}"
+            reference_price = _resolve_reference_price(decisions_by_symbol.get(symbol), daily_bars)
             row = _format_run_row(
                 symbol=safe_symbol,
                 decision=decisions_by_symbol.get(symbol),
@@ -74,12 +111,17 @@ class ObsidianMonitorRunRecorder:
                 symbol_name=symbol_names.get(symbol),
                 now=now,
             )
-            path.write_text(_prepend_monitor_run(previous, row, safe_symbol, chart_ref), encoding="utf-8")
+            path.write_text(
+                _prepend_monitor_run(previous, row, safe_symbol, chart_ref, zones, reference_price),
+                encoding="utf-8",
+            )
+
         _write_daily_trigger_summary(self.monitor_dir, decisions, now)
 
     def apply_review_updates(self, reviewed_alerts: list[AlertReviewRecord]) -> None:
         if not reviewed_alerts:
             return
+
         self.monitor_dir.mkdir(parents=True, exist_ok=True)
         alerts_by_symbol: dict[str, list[AlertReviewRecord]] = {}
         for alert in reviewed_alerts:
@@ -89,13 +131,13 @@ class ObsidianMonitorRunRecorder:
             path = self.monitor_dir / f"{_safe_filename(symbol)}.md"
             if not path.exists():
                 continue
-            previous = path.read_text(encoding="utf-8")
+            previous = _repair_legacy_mojibake(path.read_text(encoding="utf-8"))
             updated = _apply_review_updates_to_content(previous, alerts, expected_cells=_expected_cell_count(MONITOR_TABLE_HEADER))
             path.write_text(updated, encoding="utf-8")
 
         daily_path = _resolve_daily_trigger_path(self.monitor_dir)
         if daily_path.exists():
-            previous = daily_path.read_text(encoding="utf-8")
+            previous = _repair_legacy_mojibake(daily_path.read_text(encoding="utf-8"))
             updated = _apply_review_updates_to_content(
                 previous,
                 reviewed_alerts,
@@ -118,7 +160,7 @@ def _safe_filename(value: str) -> str:
 
 
 def _initial_content(symbol: str) -> str:
-    return f"# {symbol} 监控记录\n\n"
+    return _compose_document(f"# {symbol} 监控记录", "")
 
 
 def _format_entry(subject: str, message: str) -> str:
@@ -252,24 +294,27 @@ def _format_price_cell(price: float | None) -> str:
     return f"{price:.2f}"
 
 
-def _prepend_entry(previous: str, entry: str) -> str:
-    lines = previous.splitlines()
-    if lines and lines[0].startswith("# "):
-        title = lines[0]
-        body = "\n".join(lines[1:]).strip()
-        return f"{title}\n\n{entry}{body and body + chr(10)}"
-    body = previous.strip()
-    return f"{entry}{body and body + chr(10)}"
+def _prepend_entry(previous: str, entry: str, symbol: str) -> str:
+    title, body = _split_title(previous, symbol)
+    merged = f"{entry}{body and body + chr(10)}".rstrip()
+    return _compose_document(title, merged)
 
 
-def _prepend_monitor_run(previous: str, row: str, symbol: str, chart_ref: str) -> str:
+def _prepend_monitor_run(
+    previous: str,
+    row: str,
+    symbol: str,
+    chart_ref: str,
+    zones: list[PriceZone],
+    reference_price: float | None,
+) -> str:
     title, body = _split_title(previous, symbol)
     body = _remove_latest_zone_section(body)
     body = _remove_embedded_zone_tables(body)
     existing_rows = _extract_monitor_rows(body)
-    zone_section = _format_latest_zone_section(symbol, chart_ref)
+    zone_section = _format_latest_zone_section(symbol, chart_ref, zones, reference_price)
     monitor_table = _format_table(MONITOR_TABLE_HEADER, MONITOR_TABLE_SEPARATOR, [row] + existing_rows)
-    return f"{title}\n\n{zone_section}{monitor_table}\n"
+    return _compose_document(title, f"{zone_section}{monitor_table}".rstrip())
 
 
 def _prepend_daily_trigger_rows(previous: str, rows: list[str]) -> str:
@@ -281,21 +326,23 @@ def _prepend_daily_trigger_rows(previous: str, rows: list[str]) -> str:
         expected_cells=_expected_cell_count(DAILY_TRIGGER_TABLE_HEADER),
     )
     daily_table = _format_table(DAILY_TRIGGER_TABLE_HEADER, DAILY_TRIGGER_TABLE_SEPARATOR, rows + existing_rows)
-    return f"{title}\n\n{daily_table}\n"
+    return _compose_document(title, daily_table.rstrip())
 
 
 def _split_title(previous: str, symbol: str) -> tuple[str, str]:
-    lines = previous.splitlines()
+    body = _normalize_previous_body(previous)
+    lines = body.splitlines()
     if lines and lines[0].startswith("# "):
-        return lines[0], "\n".join(lines[1:]).strip()
-    return f"# {symbol} 监控记录", previous.strip()
+        return f"# {symbol} 监控记录", "\n".join(lines[1:]).strip()
+    return f"# {symbol} 监控记录", body.strip()
 
 
 def _split_daily_trigger_title(previous: str) -> tuple[str, str]:
-    lines = previous.splitlines()
+    body = _normalize_previous_body(previous)
+    lines = body.splitlines()
     if lines and lines[0].startswith("# "):
-        return lines[0], "\n".join(lines[1:]).strip()
-    return DAILY_TRIGGER_TITLE, previous.strip()
+        return DAILY_TRIGGER_TITLE, "\n".join(lines[1:]).strip()
+    return DAILY_TRIGGER_TITLE, body.strip()
 
 
 def _resolve_daily_trigger_path(monitor_dir: Path) -> Path:
@@ -304,16 +351,23 @@ def _resolve_daily_trigger_path(monitor_dir: Path) -> Path:
 
 def _load_daily_trigger_previous(path: Path, monitor_dir: Path) -> str:
     if path.exists():
-        return path.read_text(encoding="utf-8")
+        return _repair_legacy_mojibake(path.read_text(encoding="utf-8"))
     legacy_path = monitor_dir / LEGACY_DAILY_TRIGGER_FILENAME
     if legacy_path.exists():
-        return legacy_path.read_text(encoding="utf-8")
-    return f"{DAILY_TRIGGER_TITLE}\n\n"
+        return _repair_legacy_mojibake(legacy_path.read_text(encoding="utf-8"))
+    return _compose_document(DAILY_TRIGGER_TITLE, "")
 
 
-def _format_latest_zone_section(symbol: str, chart_ref: str) -> str:
+def _format_latest_zone_section(
+    symbol: str,
+    chart_ref: str,
+    zones: list[PriceZone],
+    reference_price: float | None,
+) -> str:
+    focus_block = _format_focus_zone_block(zones, reference_price)
     lines = [
         LATEST_ZONES_START,
+        *([focus_block, ""] if focus_block else []),
         f'<img src="{chart_ref}" alt="{symbol} 最新支撑压力图" style="width: 40%; max-width: 40%;" />',
         "",
         LATEST_ZONES_END,
@@ -379,7 +433,8 @@ def _apply_review_updates_to_content(
     expected_cells: int,
 ) -> str:
     updated_lines: list[str] = []
-    for raw_line in previous.splitlines():
+    normalized_previous = _repair_legacy_mojibake(previous)
+    for raw_line in normalized_previous.splitlines():
         line = raw_line
         if _looks_like_table_row(line.strip()):
             normalized = _normalize_row_columns(line.strip(), expected_cells)
@@ -388,7 +443,7 @@ def _apply_review_updates_to_content(
                 normalized = _replace_last_cell(normalized, format_review_status(matched))
             line = normalized
         updated_lines.append(line)
-    return "\n".join(updated_lines) + ("\n" if previous.endswith("\n") else "")
+    return "\n".join(updated_lines) + ("\n" if normalized_previous.endswith("\n") else "")
 
 
 def _find_matching_alert(line: str, alerts: list[AlertReviewRecord]) -> AlertReviewRecord | None:
@@ -479,58 +534,109 @@ def _strip_frontmatter(content: str) -> str:
     return content
 
 
-def _initial_content(symbol: str) -> str:
-    return _compose_document(f"# {symbol} 鐩戞帶璁板綍", "")
+def _normalize_previous_body(previous: str) -> str:
+    return _strip_frontmatter(_repair_legacy_mojibake(previous))
 
 
-def _prepend_entry(previous: str, entry: str) -> str:
-    title, body = _split_title(previous, "unknown")
-    merged = f"{entry}{body and body + chr(10)}".rstrip()
-    return _compose_document(title, merged)
+def _repair_legacy_mojibake(content: str) -> str:
+    if not content or not _looks_like_mojibake(content):
+        return content
+    fixed_lines = [_repair_mojibake_line(line) for line in content.splitlines()]
+    repaired = "\n".join(fixed_lines)
+    if content.endswith("\n"):
+        repaired += "\n"
+    return repaired
 
 
-def _prepend_monitor_run(previous: str, row: str, symbol: str, chart_ref: str) -> str:
-    title, body = _split_title(previous, symbol)
-    body = _remove_latest_zone_section(body)
-    body = _remove_embedded_zone_tables(body)
-    existing_rows = _extract_monitor_rows(body)
-    zone_section = _format_latest_zone_section(symbol, chart_ref)
-    monitor_table = _format_table(MONITOR_TABLE_HEADER, MONITOR_TABLE_SEPARATOR, [row] + existing_rows)
-    return _compose_document(title, f"{zone_section}{monitor_table}".rstrip())
+def _looks_like_mojibake(text: str) -> bool:
+    return any(marker in text for marker in MOJIBAKE_MARKERS)
 
 
-def _prepend_daily_trigger_rows(previous: str, rows: list[str]) -> str:
-    title, body = _split_daily_trigger_title(previous)
-    existing_rows = _extract_table_rows(
-        body,
-        DAILY_TRIGGER_TABLE_HEADER,
-        DAILY_TRIGGER_TABLE_SEPARATOR,
-        expected_cells=_expected_cell_count(DAILY_TRIGGER_TABLE_HEADER),
-    )
-    daily_table = _format_table(DAILY_TRIGGER_TABLE_HEADER, DAILY_TRIGGER_TABLE_SEPARATOR, rows + existing_rows)
-    return _compose_document(title, daily_table.rstrip())
+def _repair_mojibake_line(line: str) -> str:
+    if not _looks_like_mojibake(line):
+        return line
+    repaired = line.encode("gbk", errors="ignore").decode("utf-8", errors="ignore").strip()
+    return repaired or line
 
 
-def _split_title(previous: str, symbol: str) -> tuple[str, str]:
-    previous = _strip_frontmatter(previous)
-    lines = previous.splitlines()
-    if lines and lines[0].startswith("# "):
-        return lines[0], "\n".join(lines[1:]).strip()
-    return f"# {symbol} 鐩戞帶璁板綍", previous.strip()
+def _resolve_reference_price(decision: Decision | None, daily_bars: list[Bar]) -> float | None:
+    if decision is not None and decision.current_price is not None:
+        return decision.current_price
+    if daily_bars:
+        return daily_bars[-1].close
+    return None
 
 
-def _split_daily_trigger_title(previous: str) -> tuple[str, str]:
-    previous = _strip_frontmatter(previous)
-    lines = previous.splitlines()
-    if lines and lines[0].startswith("# "):
-        return lines[0], "\n".join(lines[1:]).strip()
-    return DAILY_TRIGGER_TITLE, previous.strip()
+def _format_focus_zone_block(zones: list[PriceZone], reference_price: float | None) -> str:
+    support = _select_focus_zone(zones, reference_price, zone_type="support")
+    resistance = _select_focus_zone(zones, reference_price, zone_type="resistance")
+    if support is None and resistance is None:
+        return ""
+    lines = ["> [!tip] 当前最需要关注的支撑/压力位"]
+    if support is not None:
+        lines.append(f"> - 支撑位：{_describe_zone(support, reference_price)}")
+    if resistance is not None:
+        lines.append(f"> - 压力位：{_describe_zone(resistance, reference_price)}")
+    return "\n".join(lines)
 
 
-def _load_daily_trigger_previous(path: Path, monitor_dir: Path) -> str:
-    if path.exists():
-        return path.read_text(encoding="utf-8")
-    legacy_path = monitor_dir / LEGACY_DAILY_TRIGGER_FILENAME
-    if legacy_path.exists():
-        return legacy_path.read_text(encoding="utf-8")
-    return _compose_document(DAILY_TRIGGER_TITLE, "")
+def _select_focus_zone(
+    zones: list[PriceZone],
+    reference_price: float | None,
+    zone_type: str,
+) -> PriceZone | None:
+    candidates = [zone for zone in zones if zone_type in zone.tags]
+    if not candidates:
+        return None
+    if reference_price is None:
+        return sorted(
+            candidates,
+            key=lambda zone: (
+                _level_rank(zone.level),
+                zone.importance_score,
+                zone.score,
+            ),
+            reverse=True,
+        )[0]
+    return sorted(
+        candidates,
+        key=lambda zone: (
+            _zone_position_rank(zone, reference_price, zone_type),
+            _zone_distance(zone, reference_price),
+            -_level_rank(zone.level),
+            -zone.importance_score,
+            -zone.score,
+        ),
+    )[0]
+
+
+def _zone_position_rank(zone: PriceZone, reference_price: float, zone_type: str) -> int:
+    if zone.contains(reference_price):
+        return 0
+    if zone_type == "support":
+        return 1 if zone.high <= reference_price else 2
+    return 1 if zone.low >= reference_price else 2
+
+
+def _zone_distance(zone: PriceZone, reference_price: float) -> float:
+    if zone.contains(reference_price):
+        return 0.0
+    if reference_price < zone.low:
+        return zone.low - reference_price
+    return reference_price - zone.high
+
+
+def _level_rank(level) -> int:
+    return {"A": 4, "B": 3, "C": 2, "D": 1}.get(str(level), 0)
+
+
+def _describe_zone(zone: PriceZone, reference_price: float | None) -> str:
+    timeframe = {"1d": "日线", "1w": "周线", "15m": "15分钟", "60m": "60分钟"}.get(zone.timeframe, zone.timeframe)
+    zone_type = "支撑区" if "support" in zone.tags else "压力区"
+    base = f"{timeframe}{zone.level}级{zone_type} {zone.low:.2f}-{zone.high:.2f}"
+    if reference_price is None:
+        return base
+    if zone.contains(reference_price):
+        return f"{base}（当前位于区间内）"
+    distance_pct = _zone_distance(zone, reference_price) / reference_price * 100 if reference_price else 0.0
+    return f"{base}（距当前价约 {distance_pct:.2f}%）"

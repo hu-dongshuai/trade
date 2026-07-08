@@ -24,6 +24,7 @@ class EmailConfig:
     password: str
     from_addr: str
     to_addr: str
+    use_ssl: bool = False
     use_tls: bool = True
     subject_prefix: str = "[SellMonitor]"
 
@@ -130,6 +131,7 @@ def _load_email_config() -> EmailConfig | None:
         password=os.getenv("SELL_MONITOR_SMTP_PASSWORD", ""),
         from_addr=from_addr,
         to_addr=to_addr,
+        use_ssl=_read_env_bool("SELL_MONITOR_SMTP_USE_SSL", False),
         use_tls=_read_env_bool("SELL_MONITOR_SMTP_USE_TLS", True),
         subject_prefix=os.getenv("SELL_MONITOR_EMAIL_SUBJECT_PREFIX", "[SellMonitor]"),
     )

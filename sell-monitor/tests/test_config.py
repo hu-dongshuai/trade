@@ -128,6 +128,56 @@ class ConfigTest(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_loads_email_ssl_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "examples").mkdir()
+            env_path = root / ".env"
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "SELL_MONITOR_SMTP_HOST=smtp.163.com",
+                        "SELL_MONITOR_SMTP_PORT=465",
+                        "SELL_MONITOR_SMTP_USE_SSL=true",
+                        "SELL_MONITOR_SMTP_USE_TLS=false",
+                        "SELL_MONITOR_SMTP_USERNAME=15617592163@163.com",
+                        "SELL_MONITOR_SMTP_PASSWORD=app-password",
+                        "SELL_MONITOR_EMAIL_FROM=15617592163@163.com",
+                        "SELL_MONITOR_EMAIL_TO=15617592163@163.com",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            keys = [
+                "SELL_MONITOR_ENV_FILE",
+                "SELL_MONITOR_SMTP_HOST",
+                "SELL_MONITOR_SMTP_PORT",
+                "SELL_MONITOR_SMTP_USE_SSL",
+                "SELL_MONITOR_SMTP_USE_TLS",
+                "SELL_MONITOR_SMTP_USERNAME",
+                "SELL_MONITOR_SMTP_PASSWORD",
+                "SELL_MONITOR_EMAIL_FROM",
+                "SELL_MONITOR_EMAIL_TO",
+            ]
+            previous = {key: os.environ.pop(key, None) for key in keys}
+            try:
+                os.environ["SELL_MONITOR_ENV_FILE"] = str(env_path)
+                config = load_default_config(root)
+                self.assertIsNotNone(config.email)
+                assert config.email is not None
+                self.assertEqual("smtp.163.com", config.email.smtp_host)
+                self.assertEqual(465, config.email.smtp_port)
+                self.assertTrue(config.email.use_ssl)
+                self.assertFalse(config.email.use_tls)
+                self.assertEqual("15617592163@163.com", config.email.to_addr)
+            finally:
+                for key, value in previous.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
     def test_loads_markdown_env_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

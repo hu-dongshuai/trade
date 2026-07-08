@@ -35,7 +35,7 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
             channel.send("[SellMonitor] 002241 exit_all score=6", "[002241] latest result")
 
             content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
-            self.assertTrue(content.startswith("---\ncssclasses: full-width-note\n---\n\n# 002241"))
+            self.assertTrue(content.startswith("---\ncssclasses: full-width-note\n---\n\n# 002241 监控记录"))
             self.assertLess(content.index("latest result"), content.index("first result"))
 
     def test_run_recorder_writes_review_column_for_sell_signal(self) -> None:
@@ -62,10 +62,19 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
             self.assertIn("歌尔股份", content)
             self.assertIn("28.27", content)
 
-    def test_run_recorder_writes_hold_row_without_review_status(self) -> None:
+    def test_run_recorder_repairs_legacy_mojibake_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
+            path = Path(tmp) / "002241.md"
+            path.write_text(
+                "---\ncssclasses: full-width-note\n---\n\n"
+                "# 1. 閻╂垶甯剁拋鏉跨秿\n\n"
+                "| 妫€娴嬫椂闂? | 鑲＄エ浠ｇ爜 | 缁撹 | 鍔ㄤ綔 | 鍒嗘暟 | 浠锋牸 | 鍘熷洜/鎻愮ず | 涓嬩竴姝? | 鍙栨秷鏉′欢 | 澶嶇洏 |\n"
+                "| --- | --- | --- | --- | ---: | ---: | --- | --- | --- | --- |\n"
+                "| 2026-07-06 15:00:00 | 姝屽皵鑲′唤 | 鍗栧嚭淇″彿 | reduce | 5 | 21.47 | 娴嬭瘯鍘熷洜 | 鍑忎粨 | 淇″彿娑堝け | 寰呭鐩? |\n",
+                encoding="utf-8",
+            )
 
+            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
             recorder.write_run(
                 symbols=["002241"],
                 decisions=[],
@@ -73,11 +82,14 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
                 symbol_names={"002241": "歌尔股份"},
             )
 
-            content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("# 002241 监控记录", content)
+            self.assertIn("| 检测时间 | 股票代码 | 结论 | 动作 | 分数 | 价格 | 原因/提示 | 下一步 | 取消条件 | 复盘 |", content)
             self.assertIn("歌尔股份", content)
-            self.assertIn("none", content)
+            self.assertNotIn("妫€娴", content)
+            self.assertNotIn("姝屽皵", content)
 
-    def test_daily_trigger_summary_is_written_to_when_day_should_sell(self) -> None:
+    def test_daily_trigger_summary_is_written_cleanly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
             decision = Decision(
@@ -98,7 +110,7 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
             self.assertIn("# 当日应卖出", content)
             self.assertIn("歌尔股份", content)
             self.assertIn("27.85", content)
-            self.assertNotIn("## 2026-", content)
+            self.assertNotIn("褰撴棩", content)
 
     def test_apply_review_updates_marks_false_positive_in_symbol_and_daily_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -170,15 +182,50 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
             self.assertIn('style="width: 40%; max-width: 40%;"', content)
             self.assertLess(content.index("<img"), content.index("|"))
 
+    def test_focus_support_and_resistance_are_written_before_chart(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=Path(tmp)))
+            decision = Decision(
+                symbol="002241",
+                symbol_name="歌尔股份",
+                action=Action.HOLD,
+                total_score=0,
+                priority=Priority.NORMAL,
+                reasons=["test"],
+                next_step="观察",
+                cancel_condition="-",
+                current_price=28.0,
+            )
+            zones = [
+                PriceZone(name="support", timeframe="1d", low=27.2, high=27.8, level=ZoneLevel.B, tags=["support"], importance_score=8, score=7),
+                PriceZone(name="resistance", timeframe="1d", low=29.1, high=29.8, level=ZoneLevel.A, tags=["resistance"], importance_score=9, score=8),
+            ]
+
+            recorder.write_run(
+                symbols=["002241"],
+                decisions=[decision],
+                notices=[],
+                symbol_names={"002241": "歌尔股份"},
+                zone_snapshots={"002241": zones},
+                daily_bar_snapshots={"002241": _daily_bars()},
+            )
+
+            content = (Path(tmp) / "002241.md").read_text(encoding="utf-8")
+            self.assertIn("当前最需要关注的支撑/压力位", content)
+            self.assertIn("支撑位：日线B级支撑区 27.20-27.80", content)
+            self.assertIn("压力位：日线A级压力区 29.10-29.80", content)
+            self.assertLess(content.index("当前最需要关注的支撑/压力位"), content.index("<img"))
+
     def test_legacy_daily_trigger_file_is_migrated_on_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             monitor_dir = Path(tmp)
             legacy = monitor_dir / "当天触发.md"
             legacy.write_text(
-                "# 当日触发\n\n"
-                "| 时间 | 股票代码 | 卖出动作 | 分数 | 价格 | 原因 | 建议 | 复盘 |\n"
+                "---\ncssclasses: full-width-note\n---\n\n"
+                "# 褰撴棩瑙﹀彂\n\n"
+                "| 鏃堕棿 | 鑲＄エ浠ｇ爜 | 鍗栧嚭鍔ㄤ綔 | 鍒嗘暟 | 浠锋牸 | 鍘熷洜 | 寤鸿 | 澶嶇洏 |\n"
                 "| --- | --- | --- | ---: | ---: | --- | --- | --- |\n"
-                "| 2026-06-25 09:30:00 | 002241 | reduce | 5 | 25.10 | 旧记录 | 观察 | 待复盘 |\n",
+                "| 2026-06-25 09:30:00 | 002241 | reduce | 5 | 25.10 | 鏃ц褰? | 瑙傚療 | 寰呭鐩? |\n",
                 encoding="utf-8",
             )
             recorder = ObsidianMonitorRunRecorder(ObsidianMonitorConfig(monitor_dir=monitor_dir))
@@ -190,7 +237,7 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
                 priority=Priority.HIGH,
                 reasons=["新记录"],
                 next_step="减仓",
-                cancel_condition="无",
+                cancel_condition="信号消失",
                 current_price=31.25,
             )
 
@@ -199,6 +246,7 @@ class ObsidianMarkdownChannelTest(unittest.TestCase):
             content = (monitor_dir / "当日应卖出.md").read_text(encoding="utf-8")
             self.assertIn("002241", content)
             self.assertIn("亿纬锂能", content)
+            self.assertNotIn("褰撳ぉ", content)
 
 
 if __name__ == "__main__":

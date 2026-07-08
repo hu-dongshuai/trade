@@ -144,6 +144,36 @@ class EntryStrategyTest(unittest.TestCase):
         self.assertEqual("t_reentry", decision.entry_route)
         self.assertIn("T 仓回补", "；".join(decision.reasons))
 
+    def test_probe_entry_can_allow_light_position_trial(self) -> None:
+        support = PriceZone(
+            name="daily_support_b",
+            timeframe="1d",
+            low=24.4,
+            high=24.9,
+            level=ZoneLevel.B,
+            tags=["support", "with_fvg"],
+            fragility_score=0,
+        )
+        context = _context(daily_support_zones=[support], accumulation_score=5)
+        candidate = EntryCandidate(
+            model="pullback_buy",
+            score=4,
+            planned_entry_price=24.8,
+            stop_loss_price=24.2,
+            first_take_profit_price=26.0,
+            risk_reward_ratio=1.55,
+            reasons=["日线趋势健康", "回踩到B级支撑"],
+            hard_blocking_reasons=["15分钟尚未出现明确承接确认"],
+            support_zone=support,
+        )
+
+        decision = build_entry_decision(context, [candidate])
+
+        self.assertEqual(EntryAction.ALLOW_ENTRY, decision.action)
+        self.assertTrue(decision.allowed)
+        self.assertEqual("probe_entry", decision.entry_route)
+        self.assertIn("轻仓试错", decision.next_step)
+
     def test_breakout_candidate_cannot_fall_back_to_t_reentry(self) -> None:
         context = _context()
         candidate = EntryCandidate(
@@ -161,6 +191,24 @@ class EntryStrategyTest(unittest.TestCase):
         self.assertFalse(decision.allowed)
         self.assertEqual("reject_reentry", decision.entry_route)
         self.assertIn("做T回补只适用于回踩型或订单块承接型", "；".join(decision.blocking_reasons))
+
+    def test_probe_entry_does_not_allow_breakout_model(self) -> None:
+        context = _context()
+        candidate = EntryCandidate(
+            model="breakout_buy",
+            score=4,
+            planned_entry_price=25.3,
+            stop_loss_price=24.8,
+            first_take_profit_price=26.4,
+            risk_reward_ratio=1.7,
+            reasons=["突破模型接近成立"],
+            hard_blocking_reasons=["突破后的首次回调承接不够清晰"],
+        )
+
+        decision = build_entry_decision(context, [candidate])
+
+        self.assertFalse(decision.allowed)
+        self.assertNotEqual("probe_entry", decision.entry_route)
 
     def test_c_level_support_without_strong_confluence_should_be_blocked(self) -> None:
         zone = PriceZone(

@@ -77,11 +77,13 @@ class ObsidianEntryRunRecorder:
             safe_symbol = _safe_filename(symbol)
             path = self.monitor_dir / f"{safe_symbol}.md"
             previous = path.read_text(encoding="utf-8") if path.exists() else f"# {safe_symbol} 开仓检查记录\n"
+            zones = zone_snapshots.get(symbol, [])
+            daily_bars = daily_bar_snapshots.get(symbol, [])
             chart_path = render_weekly_zone_chart(
                 self.monitor_dir / "assets",
                 safe_symbol,
-                daily_bar_snapshots.get(symbol, []),
-                zone_snapshots.get(symbol, []),
+                daily_bars,
+                zones,
             )
             row_cells = _build_row_cells(
                 symbol=safe_symbol,
@@ -90,7 +92,11 @@ class ObsidianEntryRunRecorder:
                 symbol_name=symbol_names.get(symbol),
                 now=now,
             )
-            path.write_text(_prepend_entry_run(previous, row_cells, safe_symbol, f"assets/{chart_path.name}"), encoding="utf-8")
+            reference_price = _resolve_entry_reference_price(decisions_by_symbol.get(symbol), daily_bars)
+            path.write_text(
+                _prepend_entry_run(previous, row_cells, safe_symbol, f"assets/{chart_path.name}", zones, reference_price),
+                encoding="utf-8",
+            )
 
         _write_daily_allowed_summary(self.monitor_dir, decisions, now)
 
@@ -161,7 +167,14 @@ def _write_daily_allowed_summary(monitor_dir: Path, decisions: list[EntryDecisio
     path.write_text(f"{title}\n\n{table}\n", encoding="utf-8")
 
 
-def _prepend_entry_run(previous: str, row_cells: list[str], symbol: str, chart_ref: str) -> str:
+def _prepend_entry_run(
+    previous: str,
+    row_cells: list[str],
+    symbol: str,
+    chart_ref: str,
+    zones: list[PriceZone],
+    reference_price: float | None,
+) -> str:
     title, body = _split_title(previous, symbol)
     body = _remove_latest_zone_section(body)
     existing_rows = _extract_rows(body, expected_cells=len(ENTRY_COLUMNS), start_marker=ENTRY_TABLE_START, end_marker=ENTRY_TABLE_END)
@@ -169,9 +182,11 @@ def _prepend_entry_run(previous: str, row_cells: list[str], symbol: str, chart_r
         rows = existing_rows
     else:
         rows = [row_cells, *existing_rows]
+    focus_block = _format_focus_zone_block(zones, reference_price)
     zone_section = "\n".join(
         [
             LATEST_ZONES_START,
+            *([focus_block, ""] if focus_block else []),
             f'<img src="{chart_ref}" alt="{symbol} 最新支撑压力图" style="width: 40%; max-width: 40%;" />',
             "",
             LATEST_ZONES_END,
@@ -352,6 +367,7 @@ def _extract_row_timestamp(row: list[str]) -> datetime | None:
 def _route_model_text(decision: EntryDecision) -> str:
     route_label = {
         "standard_entry": "标准开仓",
+        "probe_entry": "轻仓试错",
         "t_reentry": "T仓回补",
         "reject_reentry": "禁止回补",
     }.get(decision.entry_route, decision.entry_route)
@@ -367,6 +383,92 @@ def _fmt(value: float | None) -> str:
     if value is None:
         return "-"
     return f"{value:.2f}"
+
+
+def _resolve_entry_reference_price(decision: EntryDecision | None, daily_bars: list[Bar]) -> float | None:
+    if decision is not None:
+        if decision.current_price is not None:
+            return decision.current_price
+        if decision.planned_entry_price is not None:
+            return decision.planned_entry_price
+    if daily_bars:
+        return daily_bars[-1].close
+    return None
+
+
+def _format_focus_zone_block(zones: list[PriceZone], reference_price: float | None) -> str:
+    support = _select_focus_zone(zones, reference_price, zone_type="support")
+    resistance = _select_focus_zone(zones, reference_price, zone_type="resistance")
+    if support is None and resistance is None:
+        return ""
+    lines = ["> [!tip] 当前最需要关注的支撑/压力位"]
+    if support is not None:
+        lines.append(f"> - 支撑位：{_describe_zone(support, reference_price)}")
+    if resistance is not None:
+        lines.append(f"> - 压力位：{_describe_zone(resistance, reference_price)}")
+    return "\n".join(lines)
+
+
+def _select_focus_zone(
+    zones: list[PriceZone],
+    reference_price: float | None,
+    zone_type: str,
+) -> PriceZone | None:
+    candidates = [zone for zone in zones if zone_type in zone.tags]
+    if not candidates:
+        return None
+    if reference_price is None:
+        return sorted(
+            candidates,
+            key=lambda zone: (
+                _level_rank(zone.level),
+                zone.importance_score,
+                zone.score,
+            ),
+            reverse=True,
+        )[0]
+    return sorted(
+        candidates,
+        key=lambda zone: (
+            _zone_position_rank(zone, reference_price, zone_type),
+            _zone_distance(zone, reference_price),
+            -_level_rank(zone.level),
+            -zone.importance_score,
+            -zone.score,
+        ),
+    )[0]
+
+
+def _zone_position_rank(zone: PriceZone, reference_price: float, zone_type: str) -> int:
+    if zone.contains(reference_price):
+        return 0
+    if zone_type == "support":
+        return 1 if zone.high <= reference_price else 2
+    return 1 if zone.low >= reference_price else 2
+
+
+def _zone_distance(zone: PriceZone, reference_price: float) -> float:
+    if zone.contains(reference_price):
+        return 0.0
+    if reference_price < zone.low:
+        return zone.low - reference_price
+    return reference_price - zone.high
+
+
+def _level_rank(level) -> int:
+    return {"A": 4, "B": 3, "C": 2, "D": 1}.get(str(level), 0)
+
+
+def _describe_zone(zone: PriceZone, reference_price: float | None) -> str:
+    timeframe = {"1d": "日线", "1w": "周线", "15m": "15分钟", "60m": "60分钟"}.get(zone.timeframe, zone.timeframe)
+    zone_type = "支撑区" if "support" in zone.tags else "压力区"
+    base = f"{timeframe}{zone.level}级{zone_type} {zone.low:.2f}-{zone.high:.2f}"
+    if reference_price is None:
+        return base
+    if zone.contains(reference_price):
+        return f"{base}（当前位于区间内）"
+    distance_pct = _zone_distance(zone, reference_price) / reference_price * 100 if reference_price else 0.0
+    return f"{base}（距当前价约 {distance_pct:.2f}%）"
 
 
 def _safe_filename(value: str) -> str:
@@ -412,7 +514,14 @@ def _split_daily_trigger_title(previous: str) -> tuple[str, str]:
     return DAILY_ENTRY_TITLE, previous.strip()
 
 
-def _prepend_entry_run(previous: str, row_cells: list[str], symbol: str, chart_ref: str) -> str:
+def _prepend_entry_run(
+    previous: str,
+    row_cells: list[str],
+    symbol: str,
+    chart_ref: str,
+    zones: list[PriceZone],
+    reference_price: float | None,
+) -> str:
     title, body = _split_title(previous, symbol)
     body = _remove_latest_zone_section(body)
     existing_rows = _extract_rows(body, expected_cells=len(ENTRY_COLUMNS), start_marker=ENTRY_TABLE_START, end_marker=ENTRY_TABLE_END)
@@ -420,9 +529,11 @@ def _prepend_entry_run(previous: str, row_cells: list[str], symbol: str, chart_r
         rows = existing_rows
     else:
         rows = [row_cells, *existing_rows]
+    focus_block = _format_focus_zone_block(zones, reference_price)
     zone_section = "\n".join(
         [
             LATEST_ZONES_START,
+            *([focus_block, ""] if focus_block else []),
             f'<img src="{chart_ref}" alt="{symbol} 最新支撑压力图" style="width: 40%; max-width: 40%;" />',
             "",
             LATEST_ZONES_END,

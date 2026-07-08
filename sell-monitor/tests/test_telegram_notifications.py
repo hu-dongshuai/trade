@@ -27,6 +27,7 @@ class TelegramNotificationTest(unittest.TestCase):
             reasons=["第三根危险上影线确认", "放量跌破15分钟MA20"],
             next_step="执行清仓",
             cancel_condition="重新站回关键压力位上方",
+            current_price=21.56,
         )
         hold_decision = Decision(
             symbol="002241",
@@ -41,8 +42,15 @@ class TelegramNotificationTest(unittest.TestCase):
 
         self.assertTrue(_should_send_sell_telegram(sell_decision))
         self.assertFalse(_should_send_sell_telegram(hold_decision))
-        self.assertIn("股票: 歌尔股份(002241)", _format_sell_telegram_message(sell_decision))
-        self.assertIn("类型: 卖出", _format_sell_telegram_message(sell_decision))
+
+        message = _format_sell_telegram_message(sell_decision)
+        self.assertIn("动作: exit_all", message)
+        self.assertIn("价格: 21.56", message)
+        self.assertIn("下一步: 执行清仓", message)
+        self.assertIn("1. 第三根危险上影线确认", message)
+        self.assertIn("2. 放量跌破15分钟MA20", message)
+        self.assertNotIn("股票:", message)
+        self.assertNotIn("类型:", message)
 
     def test_sell_telegram_threshold_is_five(self) -> None:
         below_threshold = Decision(
@@ -83,8 +91,8 @@ class TelegramNotificationTest(unittest.TestCase):
             first_take_profit_price=13.9,
             risk_reward_ratio=2.6,
             reasons=["日线趋势健康", "15分钟出现承接确认"],
-            blocking_reasons=[],
-            next_step="按计划挂单",
+            blocking_reasons=["上方有近端压力，需要轻仓试单"],
+            next_step="按计划挂单，成交后严守止损",
         )
         rejected = EntryDecision(
             symbol="300015",
@@ -105,11 +113,18 @@ class TelegramNotificationTest(unittest.TestCase):
 
         self.assertTrue(_should_send_entry_telegram(decision))
         self.assertFalse(_should_send_entry_telegram(rejected))
+
         message = _format_entry_telegram_message(decision)
-        self.assertIn("股票: 爱尔眼科(300015)", message)
-        self.assertIn("类型: 买入", message)
-        self.assertIn("路线: 标准开仓", message)
-        self.assertIn("计划挂单价: 12.30", message)
+        self.assertIn("路线: 标准开仓 / pullback_buy", message)
+        self.assertIn("计划: 12.30", message)
+        self.assertIn("止损: 11.70", message)
+        self.assertIn("止盈1: 13.90", message)
+        self.assertIn("盈亏比: 2.60", message)
+        self.assertIn("1. 日线趋势健康", message)
+        self.assertIn("2. 15分钟出现承接确认", message)
+        self.assertIn("注意:\n1. 上方有近端压力，需要轻仓试单", message)
+        self.assertNotIn("股票:", message)
+        self.assertNotIn("类型:", message)
 
     def test_telegram_config_placeholder_is_ignored_by_shape(self) -> None:
         config = TelegramConfig(
@@ -127,7 +142,7 @@ class TelegramNotificationTest(unittest.TestCase):
             action=Action.EXIT_ALL,
             total_score=7,
             priority=Priority.IMMEDIATE,
-            reasons=["第三根危险上影线确认"],
+            reasons=["第三根危险上影线确认", "14:15 这根15分钟K线放量跌破MA20"],
             next_step="清仓",
             cancel_condition="无",
             current_price=23.07,
@@ -138,7 +153,7 @@ class TelegramNotificationTest(unittest.TestCase):
             action=Action.REDUCE,
             total_score=5,
             priority=Priority.HIGH,
-            reasons=["第一根危险上影线"],
+            reasons=["第一根危险上影线", "11:00 这根15分钟K线放量滞涨"],
             next_step="减仓",
             cancel_condition="无",
             current_price=23.60,
@@ -157,10 +172,15 @@ class TelegramNotificationTest(unittest.TestCase):
         telegram_channel.send.assert_called_once()
         subject = telegram_channel.send.call_args.kwargs["subject"]
         message = telegram_channel.send.call_args.kwargs["message"]
-        self.assertIn("回溯补齐卖出汇总", subject)
-        self.assertIn("count=2", subject)
-        self.assertIn("2026-06-24 09:30 exit_all", message)
-        self.assertIn("2026-06-24 10:30 reduce", message)
+        self.assertIn("回溯卖出", subject)
+        self.assertIn("2条", subject)
+        self.assertIn("2026-06-24 09:30", message)
+        self.assertIn("动作: exit_all", message)
+        self.assertIn("1. 第三根危险上影线确认", message)
+        self.assertIn("2. 14:15 这根15分钟K线放量跌破MA20", message)
+        self.assertIn("2026-06-24 10:30", message)
+        self.assertIn("动作: reduce", message)
+        self.assertIn("2. 11:00 这根15分钟K线放量滞涨", message)
 
     def test_backfill_summary_formatter_limits_extra_rows(self) -> None:
         decision = Decision(
@@ -179,7 +199,7 @@ class TelegramNotificationTest(unittest.TestCase):
 
         message = _format_backfill_sell_telegram_summary("歌尔股份(002241)", items)
 
-        self.assertIn("条数: 9", message)
+        self.assertIn("时间范围: 2026-06-24 09:30 - 2026-06-24 13:00", message)
         self.assertIn("其余 1 条已省略", message)
 
 

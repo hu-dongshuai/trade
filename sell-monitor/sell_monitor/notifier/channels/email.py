@@ -20,8 +20,9 @@ class EmailChannel:
         email["Subject"] = subject
         email.set_content(message)
 
-        with smtplib.SMTP(self.config.smtp_host, self.config.smtp_port, timeout=20) as smtp:
-            if self.config.use_tls:
+        smtp_cls = smtplib.SMTP_SSL if self.config.use_ssl else smtplib.SMTP
+        with smtp_cls(self.config.smtp_host, self.config.smtp_port, timeout=20) as smtp:
+            if self.config.use_tls and not self.config.use_ssl:
                 smtp.starttls()
             if self.config.username:
                 smtp.login(self.config.username, self.config.password)
